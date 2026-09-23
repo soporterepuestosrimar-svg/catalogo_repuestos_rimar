@@ -29,7 +29,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilos CSS avanzados para alinear tarjetas de manera prolija
+# Estilos CSS avanzados para alinear tarjetas de manera prolija y simétrica
 st.markdown("""
     <style>
     .main {
@@ -42,37 +42,40 @@ st.markdown("""
         background-color: #E31E24;
         color: white;
         font-weight: bold;
+        width: 100%;
+        border-radius: 6px;
     }
     .iva-badge {
         background-color: #FFC107;
         color: #0A1628;
         padding: 2px 6px;
         border-radius: 4px;
-        font-size: 0.85em;
+        font-size: 0.8em;
         font-weight: bold;
         margin-left: 6px;
     }
     .product-card {
         background-color: white;
         border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 15px;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 20px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+        height: 100%;
     }
     .product-title {
-        font-size: 1.05rem;
+        font-size: 1rem;
         font-weight: bold;
         color: #0A1628;
-        height: 50px;
+        height: 48px;
         overflow: hidden;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -82,7 +85,6 @@ LOGO_FILE = "logo_rimar.png"
 TEMP_ZIP_DIR = "temp_zip_images"
 os.makedirs(TEMP_ZIP_DIR, exist_ok=True)
 
-@st.cache_data
 def cargar_datos():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
@@ -104,8 +106,8 @@ def cargar_datos():
         }
         return pd.DataFrame(data)
 
-if "df_productos" not in st.session_state:
-    st.session_state.df_productos = cargar_datos()
+# Cargar base de datos persistente
+df = cargar_datos()
 
 def clasificar_repuesto(descripcion):
     desc = str(descripcion).upper()
@@ -136,9 +138,9 @@ def generar_pdf(dataframe_filtrado, nombre_asesor, telefono_asesor):
     elementos = []
     
     styles = getSampleStyleSheet()
-    estilo_titulo = ParagraphStyle('TituloPDF', parent=styles['Heading1'], fontSize=20, textColor=colors.HexColor('#0A1628'), alignment=1)
-    estilo_sub = ParagraphStyle('SubTituloPDF', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#555555'), alignment=1)
-    estilo_celda = ParagraphStyle('CeldaPDF', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#333333'))
+    estilo_titulo = ParagraphStyle('TituloPDF', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#0A1628'), alignment=1)
+    estilo_sub = ParagraphStyle('SubTituloPDF', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#555555'), alignment=1)
+    estilo_celda = ParagraphStyle('CeldaPDF', parent=styles['Normal'], fontSize=8.5, textColor=colors.HexColor('#333333'))
     
     elementos.append(Paragraph("REPUESTOS RIMAR - CATÁLOGO DIGITAL", estilo_titulo))
     elementos.append(Paragraph("Confianza que mueve tu motor | Contacto Asesor: " + nombre_asesor + " (" + telefono_asesor + ")", estilo_sub))
@@ -161,13 +163,13 @@ def generar_pdf(dataframe_filtrado, nombre_asesor, telefono_asesor):
             Paragraph(precio_val + " +IVA", estilo_celda)
         ])
         
-    tabla = Table(datos_tabla, colWidths=[65, 230, 80, 90, 75])
+    tabla = Table(datos_tabla, colWidths=[60, 235, 75, 90, 80])
     tabla.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0A1628')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
         ('ALIGN', (0,0), (-1,-1), 'LEFT'),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,0), 10),
+        ('FONTSIZE', (0,0), (-1,0), 9),
         ('BOTTOMPADDING', (0,0), (-1,0), 6),
         ('BACKGROUND', (0,1), (-1,-1), colors.HexColor('#f9f9f9')),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
@@ -185,7 +187,7 @@ with col_logo:
     logo_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200"
     if os.path.exists(LOGO_FILE):
         logo_url = LOGO_FILE
-    st.image(logo_url, width=130)
+    st.image(logo_url, width=120)
 
 with col_titulo:
     st.title("Repuestos Rimar - Catálogo Digital")
@@ -194,9 +196,6 @@ with col_titulo:
 st.divider()
 
 # --- PREPARAR DATOS Y FILTROS ---
-df = st.session_state.df_productos
-df.columns = [c.strip().upper() for c in df.columns]
-
 if 'CATEGORIA' not in df.columns:
     df['CATEGORIA'] = df['DESCRIPSION'].apply(clasificar_repuesto)
 
@@ -238,7 +237,7 @@ if password == "admin123":
     st.sidebar.success("✅ Acceso concedido")
     pestana_admin = st.sidebar.radio("Opciones de Admin", [
         "Cargar Masivo (Excel/CSV)", 
-        "Subida Masiva de Fotos (ZIP Ultrarrápido)",
+        "Subida Masiva de Fotos (ZIP Permanente)",
         "Cambiar Logo de Empresa"
     ])
     
@@ -270,27 +269,23 @@ if password == "admin123":
                     
                     df_subido['CATEGORIA'] = df_subido['DESCRIPSION'].apply(clasificar_repuesto)
                     
-                    df_actual = st.session_state.df_productos
-                    df_actual.columns = [c.strip().upper() for c in df_actual.columns]
-                    
                     df_subido['ARTICULO'] = df_subido['ARTICULO'].astype(str)
-                    df_actual['ARTICULO'] = df_actual['ARTICULO'].astype(str)
+                    df['ARTICULO'] = df['ARTICULO'].astype(str)
                     
-                    df_combinado = pd.concat([df_actual, df_subido]).drop_duplicates(subset=['ARTICULO'], keep='last').reset_index(drop=True)
+                    df_combinado = pd.concat([df, df_subido]).drop_duplicates(subset=['ARTICULO'], keep='last').reset_index(drop=True)
                         
-                    st.session_state.df_productos = df_combinado
                     df_combinado.to_csv(DATA_FILE, index=False)
-                    st.sidebar.success("¡Artículos agregados exitosamente!")
+                    st.sidebar.success("¡Artículos guardados en la base de datos!")
                     st.rerun()
                 else:
                     st.sidebar.error("El archivo debe contener: ARTICULO, DESCRIPSION, PRECIO")
             except Exception as e:
                 st.sidebar.error(f"Error: {e}")
 
-    elif pestana_admin == "Subida Masiva de Fotos (ZIP Ultrarrápido)":
-        st.sidebar.subheader("Subida Masiva Optimizada")
-        st.sidebar.markdown("Sube tu archivo `.zip`. El sistema indexará las fotos al instante y actualizará la base de datos de manera eficiente.")
-        archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP con fotos", type=["zip"])
+    elif pestana_admin == "Subida Masiva de Fotos (ZIP Permanente)":
+        st.sidebar.subheader("Subida Masiva a la Nube")
+        st.sidebar.markdown("Sube tu `.zip`. Las fotos se subirán a Cloudinary y se guardarán permanentemente.")
+        archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP", type=["zip"])
         
         if archivo_zip is not None:
             if os.path.exists(TEMP_ZIP_DIR):
@@ -300,7 +295,6 @@ if password == "admin123":
             with zipfile.ZipFile(archivo_zip, 'r') as z:
                 z.extractall(TEMP_ZIP_DIR)
             
-            # Crear mapa rápido optimizado de archivos encontrados
             mapa_fotos = {}
             for root, dirs, files in os.walk(TEMP_ZIP_DIR):
                 for file in files:
@@ -310,31 +304,23 @@ if password == "admin123":
                         if limpio:
                             mapa_fotos[limpio] = os.path.join(root, file)
 
-            df_actual = st.session_state.df_productos
-            df_actual.columns = [c.strip().upper() for c in df_actual.columns]
-            
             actualizados = 0
-            
-            # Procesamiento optimizado por lotes (solo sube las fotos de artículos existentes que aún no tengan link web)
-            for idx, row in df_actual.iterrows():
+            for idx, row in df.iterrows():
                 art_num = str(row['ARTICULO']).strip()
                 art_limpio = re.sub(r'\D', '', art_num)
-                img_actual = str(row.get('IMAGEN', ''))
                 
-                # Si el artículo tiene foto en el ZIP y no tiene URL permanente de Cloudinary aún
-                if art_limpio in mapa_fotos and ('cloudinary.com' not in img_actual):
+                if art_limpio in mapa_fotos:
                     foto_path = mapa_fotos[art_limpio]
                     try:
                         res = cloudinary.uploader.upload(foto_path, folder="catalogo_rimar")
                         secure_url = res.get("secure_url")
-                        df_actual.loc[idx, 'IMAGEN'] = secure_url
+                        df.loc[idx, 'IMAGEN'] = secure_url
                         actualizados += 1
                     except Exception as ex:
                         pass
 
-            st.session_state.df_productos = df_actual
-            df_actual.to_csv(DATA_FILE, index=False)
-            st.sidebar.success(f"¡Proceso completado! Se sincronizaron {actualizados} fotos nuevas a la nube exitosamente.")
+            df.to_csv(DATA_FILE, index=False)
+            st.sidebar.success(f"¡{actualizados} fotos subidas y guardadas en la nube!")
             st.rerun()
 
     elif pestana_admin == "Cambiar Logo de Empresa":
@@ -378,57 +364,63 @@ st.divider()
 if df_filtrado.empty:
     st.warning("No se encontraron repuestos con los filtros seleccionados.")
 
-# --- MOSTRAR PRODUCTOS EN CUADRÍCULA ---
-cols = st.columns(3)
-for i, row in df_filtrado.iterrows():
-    with cols[i % 3]:
-        original_idx = row.name
-        art_val = row.get('ARTICULO', 'S/N')
-        
-        if modo_admin:
-            with st.expander(f"✏️ Editar Artículo: {art_val}"):
-                with st.form(f"form_edit_{original_idx}"):
-                    nuevo_desc = st.text_input("Descripción", value=str(row.get('DESCRIPSION', '')))
-                    nueva_marca = st.text_input("Marca", value=str(row.get('MARCA', '')))
-                    nuevo_precio = st.number_input("Precio ($)", value=int(row.get('PRECIO', 0)), step=1000)
-                    nueva_foto = st.file_uploader("Cambiar Foto (Opcional)", type=["jpg", "png", "jpeg"], key=f"img_{original_idx}")
-                    
-                    guardar_btn = st.form_submit_button("Guardar Cambios")
-                    if guardar_btn:
-                        df.loc[original_idx, 'DESCRIPSION'] = nuevo_desc
-                        df.loc[original_idx, 'MARCA'] = nueva_marca
-                        df.loc[original_idx, 'PRECIO'] = nuevo_precio
-                        df.loc[original_idx, 'CATEGORIA'] = clasificar_repuesto(nuevo_desc)
-                        
-                        if nueva_foto is not None:
-                            res_up = cloudinary.uploader.upload(nueva_foto, folder="catalogo_rimar")
-                            df.loc[original_idx, 'IMAGEN'] = res_up.get("secure_url")
-                            
-                        st.session_state.df_productos = df
-                        df.to_csv(DATA_FILE, index=False)
-                        st.success("¡Actualizado con éxito!")
-                        st.rerun()
+# --- MOSTRAR PRODUCTOS EN CUADRÍCULA ORDENADA (3 COLUMNAS) ---
+lista_productos = df_filtrado.to_dict('records')
+num_cols = 3
+filas = [lista_productos[i:i + num_cols] for i in range(0, len(lista_productos), num_cols)]
 
-        img_url = row.get('IMAGEN', "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400")
-        if pd.isna(img_url) or not str(img_url).startswith("http"):
-            img_url = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
+for fila in filas:
+    cols = st.columns(num_cols)
+    for idx, row in enumerate(fila):
+        with cols[idx]:
+            original_idx = row.get('index', row.get('ARTICULO'))
+            art_val = str(row.get('ARTICULO', 'S/N'))
             
-        marca_val = row.get('MARCA', 'GENERICA')
-        desc_val = str(row.get('DESCRIPSION', 'Sin descripción'))
-        cat_val = row.get('CATEGORIA', 'General')
-        precio_num = row.get('PRECIO', 0)
-        precio_val = f"${int(precio_num):,}" if pd.notna(precio_num) else "$0"
-        
-        # --- TARJETA VISUAL PROLIJA ---
-        with st.container():
+            if modo_admin:
+                with st.expander(f"✏️ Editar: {art_val}"):
+                    with st.form(f"form_edit_{art_val}"):
+                        nuevo_desc = st.text_input("Descripción", value=str(row.get('DESCRIPSION', '')))
+                        nueva_marca = st.text_input("Marca", value=str(row.get('MARCA', '')))
+                        nuevo_precio = st.number_input("Precio ($)", value=int(row.get('PRECIO', 0)), step=1000)
+                        nueva_foto = st.file_uploader("Cambiar Foto", type=["jpg", "png", "jpeg"], key=f"img_{art_val}")
+                        
+                        guardar_btn = st.form_submit_button("Guardar Cambios")
+                        if guardar_btn:
+                            match_idx = df[df['ARTICULO'].astype(str) == art_val].index
+                            if len(match_idx) > 0:
+                                i_real = match_idx[0]
+                                df.loc[i_real, 'DESCRIPSION'] = nuevo_desc
+                                df.loc[i_real, 'MARCA'] = nueva_marca
+                                df.loc[i_real, 'PRECIO'] = nuevo_precio
+                                df.loc[i_real, 'CATEGORIA'] = clasificar_repuesto(nuevo_desc)
+                                
+                                if nueva_foto is not None:
+                                    res_up = cloudinary.uploader.upload(nueva_foto, folder="catalogo_rimar")
+                                    df.loc[i_real, 'IMAGEN'] = res_up.get("secure_url")
+                                    
+                                df.to_csv(DATA_FILE, index=False)
+                                st.success("¡Actualizado en la nube!")
+                                st.rerun()
+
+            img_url = row.get('IMAGEN', "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400")
+            if pd.isna(img_url) or not str(img_url).startswith("http"):
+                img_url = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
+                
+            marca_val = row.get('MARCA', 'GENERICA')
+            desc_val = str(row.get('DESCRIPSION', 'Sin descripción'))
+            cat_val = row.get('CATEGORIA', 'General')
+            precio_num = row.get('PRECIO', 0)
+            precio_val = f"${int(precio_num):,}" if pd.notna(precio_num) else "$0"
+            
+            # --- TARJETA VISUAL ALINEADA Y PROLIJA ---
             st.markdown(f"""
                 <div class="product-card">
                     <div>
-                        <div style="font-size: 0.8em; color: #666; margin-bottom: 4px;">
+                        <div style="font-size: 0.75em; color: #666; margin-bottom: 4px;">
                             🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}
                         </div>
                         <div class="product-title">{desc_val}</div>
-                        <div style="font-size: 1.1rem; font-weight: bold; color: #0A1628; margin-bottom: 8px;">
+                        <div style="font-size: 1.05rem; font-weight: bold; color: #0A1628; margin-bottom: 10px;">
                             Precio: {precio_val} <span class="iva-badge">+IVA</span>
                         </div>
                     </div>
@@ -442,10 +434,9 @@ for i, row in df_filtrado.iterrows():
 
             st.markdown(f"""
                 <div style="margin-top: 10px; margin-bottom: 20px;">
-                    <a href="{url_whatsapp}" target="_blank" style="display:block;text-align:center;padding:10px 15px;background-color:#25D366;color:white;text-decoration:none;border-radius:5px;font-weight:bold;">💬 Pedir con {nombre_asesor.split()[0]}</a>
+                    <a href="{url_whatsapp}" target="_blank" style="display:block;text-align:center;padding:10px 15px;background-color:#25D366;color:white;text-decoration:none;border-radius:6px;font-weight:bold;">💬 Pedir con {nombre_asesor.split()[0]}</a>
                 </div>
             """, unsafe_allow_html=True)
-            st.divider()
 
 st.markdown("---")
 st.markdown("© 2026 **Repuestos Rimar** - Todos los derechos reservados. Contacto General: **+57 350 8258778**")
