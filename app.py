@@ -5,6 +5,7 @@ import cloudinary
 import cloudinary.uploader
 import zipfile
 import re
+import shutil
 
 # ==========================================
 # CONFIGURACIÓN DE CLOUDINARY (Tus datos oficiales)
@@ -89,7 +90,6 @@ def clasificar_repuesto(descripcion):
     elif any(k in desc for k in ["FILTRO"]):
         return "Filtros"
     else:
-        # Si no encaja exactamente, devuelve una categoría general basada en la primera palabra
         palabras = desc.split()
         return palabras[0] if palabras else "General"
 
@@ -107,7 +107,7 @@ with col_titulo:
 
 st.divider()
 
-# --- PREPARAR DATOS Y FILTROS INTELIGENTES ---
+# --- PREPARAR DATOS Y FILTROS ---
 df = st.session_state.df_productos
 df.columns = [c.strip().upper() for c in df.columns]
 
@@ -118,11 +118,9 @@ if 'CATEGORIA' not in df.columns:
 st.sidebar.header("🔍 Filtros de Búsqueda")
 busqueda = st.sidebar.text_input("Buscar por artículo o descripción...")
 
-# Filtro por Tipo de Repuesto (Categoría)
 categorias_disponibles = ["Todas"] + sorted(df['CATEGORIA'].dropna().unique().tolist())
 filtro_categoria = st.sidebar.selectbox("📂 Filtrar por Tipo de Repuesto", categorias_disponibles)
 
-# Filtro por Marca (Kunyuan, Herko, Mopar, Arco, etc.)
 if 'MARCA' in df.columns:
     marcas_disponibles = ["Todas"] + sorted(df['MARCA'].dropna().astype(str).unique().tolist())
     filtro_marca = st.sidebar.selectbox("🏷️ Filtrar por Marca", marcas_disponibles)
@@ -184,7 +182,6 @@ if password == "admin123":
                     if 'MARCA' not in df_subido.columns:
                         df_subido['MARCA'] = "GENERICA"
                     
-                    # Asignar categorías automáticamente según la descripción
                     df_subido['CATEGORIA'] = df_subido['DESCRIPSION'].apply(clasificar_repuesto)
                         
                     st.session_state.df_productos = df_subido
@@ -196,29 +193,29 @@ if password == "admin123":
             except Exception as e:
                 st.sidebar.error(f"Error al procesar el archivo: {e}")
 
-    # 2. SUBIDA MASIVA DE FOTOS MEJORADA (LEE CUALQUIER NOMBRE/EXTENSIÓN)
+    # 2. SUBIDA MASIVA DE FOTOS EN ZIP (CORREGIDO PARA EVITAR ISADISDIRECTORYERROR)
     elif pestana_admin == "Subida Masiva de Fotos (ZIP)":
         st.sidebar.subheader("Subir Fotos en Lote (ZIP)")
         st.sidebar.markdown("Sube un archivo **.zip** con tus fotos nombradas con el número de artículo (ej: `10652.jpg`).")
         archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP con fotos", type=["zip"])
         
         if archivo_zip is not None:
-            # Limpiar directorio temporal previo
-            for f in os.listdir(TEMP_IMAGE_DIR):
-                os.remove(os.path.join(TEMP_IMAGE_DIR, f))
+            # Limpiar carpeta temporal de forma segura
+            if os.path.exists(TEMP_IMAGE_DIR):
+                shutil.rmtree(TEMP_IMAGE_DIR)
+            os.makedirs(TEMP_IMAGE_DIR, exist_ok=True)
                 
             with zipfile.ZipFile(archivo_zip, 'r') as z:
                 z.extractall(TEMP_IMAGE_DIR)
             
-            # Recorrer de forma recursiva por si vienen dentro de una carpeta en el ZIP
             mapa_fotos = {}
             for root, dirs, files in os.walk(TEMP_IMAGE_DIR):
                 for file in files:
-                    # Extraer solo los números del nombre del archivo (ej: "10652.jpg" -> "10652")
-                    nombre_base = os.path.splitext(file)[0].strip()
-                    limpio = re.sub(r'\D', '', nombre_base) # quita caracteres raros
-                    if limpio:
-                        mapa_fotos[limpio] = os.path.join(root, file)
+                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                        nombre_base = os.path.splitext(file)[0].strip()
+                        limpio = re.sub(r'\D', '', nombre_base)
+                        if limpio:
+                            mapa_fotos[limpio] = os.path.join(root, file)
 
             df_actual = st.session_state.df_productos
             df_actual.columns = [c.strip().upper() for c in df_actual.columns]
@@ -259,18 +256,15 @@ elif password != "":
 # --- APLICAR FILTROS EN PANTALLA ---
 df_filtrado = df.copy()
 
-# Filtro de búsqueda por texto
 if busqueda:
     df_filtrado = df_filtrado[
         df_filtrado.get('ARTICULO', pd.Series(['']*len(df_filtrado))).astype(str).str.lower().str.contains(busqueda.lower()) |
         df_filtrado.get('DESCRIPSION', pd.Series(['']*len(df_filtrado))).astype(str).str.lower().str.contains(busqueda.lower())
     ]
 
-# Filtro por Categoría / Tipo de Repuesto
 if filtro_categoria != "Todas":
     df_filtrado = df_filtrado[df_filtrado['CATEGORIA'] == filtro_categoria]
 
-# Filtro por Marca
 if filtro_marca != "Todas" and 'MARCA' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['MARCA'].astype(str) == filtro_marca]
 
