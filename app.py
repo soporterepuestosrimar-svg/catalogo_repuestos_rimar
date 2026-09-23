@@ -31,73 +31,73 @@ st.set_page_config(
 
 # Estilos CSS avanzados (Alineación perfecta y tarjetas idénticas)
 st.markdown("""
-    <style>
-    .main {
-        background-color: #f8f9fa;
-    }
-    h1, h2, h3 {
-        color: #0A1628;
-    }
-    .stButton>button {
-        background-color: #E31E24;
-        color: white;
-        font-weight: bold;
-        width: 100%;
-        border-radius: 6px;
-    }
-    .btn-volver>button {
-        background-color: #6c757d !important;
-        color: white !important;
-    }
-    .iva-badge {
-        background-color: #FFC107;
-        color: #0A1628;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 0.8em;
-        font-weight: bold;
-        margin-left: 6px;
-    }
-    .product-card {
-        background-color: white;
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 16px;
-        margin-bottom: 20px;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.04);
-        height: 100%;
-    }
-    .product-title {
-        font-size: 0.95rem;
-        font-weight: bold;
-        color: #0A1628;
-        height: 44px;
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        margin-bottom: 8px;
-    }
-    .img-container {
-        width: 100%;
-        height: 200px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        overflow: hidden;
-        margin-bottom: 15px;
-        border-radius: 8px;
-        background-color: #ffffff;
-    }
-    .img-container img {
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain;
-    }
-    </style>
+<style>
+.main {
+    background-color: #f8f9fa;
+}
+h1, h2, h3 {
+    color: #0A1628;
+}
+.stButton>button {
+    background-color: #E31E24;
+    color: white;
+    font-weight: bold;
+    width: 100%;
+    border-radius: 6px;
+}
+.btn-volver>button {
+    background-color: #6c757d !important;
+    color: white !important;
+}
+.iva-badge {
+    background-color: #FFC107;
+    color: #0A1628;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-left: 6px;
+}
+.product-card {
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+    height: 100%;
+}
+.product-title {
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #0A1628;
+    height: 44px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    margin-bottom: 8px;
+}
+.img-container {
+    width: 100%;
+    height: 200px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    background-color: #ffffff;
+}
+.img-container img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+</style>
 """, unsafe_allow_html=True)
 
 DATA_FILE = "inventario_rimar.csv"
@@ -408,11 +408,13 @@ if st.session_state.detalle_articulo is not None:
             if pd.isna(img_detalle) or not str(img_detalle).startswith("http"):
                 img_detalle = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
             
-            st.markdown(f"""
-                <div class="img-container" style="height: 400px; border: 1px solid #ddd;">
-                    <img src="{img_detalle}">
-                </div>
-            """, unsafe_allow_html=True)
+            # HTML formateado sin espacios iniciales
+            html_img_detalle = f"""
+<div class="img-container" style="height: 400px; border: 1px solid #ddd;">
+    <img src="{img_detalle}">
+</div>
+"""
+            st.markdown(html_img_detalle, unsafe_allow_html=True)
             
         with c2:
             st.markdown(f"## 🆔 Artículo: {prod.get('ARTICULO')}")
@@ -427,7 +429,6 @@ if st.session_state.detalle_articulo is not None:
             st.markdown("---")
             st.markdown("#### 🔢 Selecciona la cantidad (Usa los botones + y -):")
             
-            # Sumador de cantidades nativo de Streamlit
             cantidad = st.number_input("Cantidad", min_value=1, value=1, step=1, label_visibility="collapsed")
             
             precio_total = int(precio_unit) * cantidad if pd.notna(precio_unit) else 0
@@ -440,13 +441,15 @@ if st.session_state.detalle_articulo is not None:
             mensaje = f"Hola {nombre_asesor}, me interesa adquirir {cantidad} unidad(es) del repuesto *{desc_text}* (Artículo: {art_code}) por un valor total de {precio_total_fmt} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
             url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
 
-            st.markdown(f"""
-                <div style="margin-top: 15px;">
-                    <a href="{url_whatsapp}" target="_blank" style="display:block;text-align:center;padding:12px 20px;background-color:#25D366;color:white;text-decoration:none;border-radius:6px;font-weight:bold;font-size:1.1rem;">💬 Pedir {cantidad} unidad(es) por WhatsApp</a>
-                </div>
-            """, unsafe_allow_html=True)
+            # HTML formateado sin espacios iniciales
+            html_btn_whatsapp = f"""
+<div style="margin-top: 15px;">
+    <a href="{url_whatsapp}" target="_blank" style="display:block;text-align:center;padding:12px 20px;background-color:#25D366;color:white;text-decoration:none;border-radius:6px;font-weight:bold;font-size:1.1rem;">💬 Pedir {cantidad} unidad(es) por WhatsApp</a>
+</div>
+"""
+            st.markdown(html_btn_whatsapp, unsafe_allow_html=True)
             
-        st.stop() # Esto detiene la página para que solo se vea la ventana de detalles
+        st.stop()
 
 # =======================================================
 # MOSTRAR CATÁLOGO NORMAL (SI NO HAY ARTÍCULO SELECCIONADO)
@@ -512,30 +515,30 @@ for fila in filas:
             precio_num = row.get('PRECIO', 0)
             precio_val = f"${int(precio_num):,}" if pd.notna(precio_num) else "$0"
             
-            # --- TARJETA CON CONTENEDOR DE IMAGEN EXACTO ---
-            with st.container():
-                st.markdown(f"""
-                    <div class="product-card">
-                        <div>
-                            <div style="font-size: 0.75em; color: #666; margin-bottom: 4px;">
-                                🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}
-                            </div>
-                            <div class="product-title">{desc_val}</div>
-                            
-                            <div class="img-container">
-                                <img src="{img_url}">
-                            </div>
-                            
-                            <div style="font-size: 1.05rem; font-weight: bold; color: #0A1628; margin-bottom: 10px; text-align: center;">
-                                {precio_val} <span class="iva-badge">+IVA</span>
-                            </div>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                if st.button("🔍 Ver Detalle y Comprar", key=f"btn_det_{art_val}"):
-                    st.session_state.detalle_articulo = art_val
-                    st.rerun()
+            # --- TARJETA CON CONTENEDOR DE IMAGEN EXACTO Y SIN ESPACIOS INICIALES ---
+            html_tarjeta_catalogo = f"""
+<div class="product-card">
+    <div>
+        <div style="font-size: 0.75em; color: #666; margin-bottom: 4px;">
+            🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}
+        </div>
+        <div class="product-title">{desc_val}</div>
+        
+        <div class="img-container">
+            <img src="{img_url}">
+        </div>
+        
+        <div style="font-size: 1.05rem; font-weight: bold; color: #0A1628; margin-bottom: 10px; text-align: center;">
+            {precio_val} <span class="iva-badge">+IVA</span>
+        </div>
+    </div>
+</div>
+"""
+            st.markdown(html_tarjeta_catalogo, unsafe_allow_html=True)
+            
+            if st.button("🔍 Ver Detalle y Comprar", key=f"btn_det_cat_{art_val}"):
+                st.session_state.detalle_articulo = art_val
+                st.rerun()
 
 st.markdown("---")
 st.markdown("© 2026 **Repuestos Rimar** - Todos los derechos reservados. Contacto General: **+57 350 8258778**")
