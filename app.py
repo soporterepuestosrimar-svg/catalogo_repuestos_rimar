@@ -13,7 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 # ==========================================
-# CONFIGURACIÓN OFICIAL DE CLOUDINARY (Nube Permanente)
+# CONFIGURACIÓN OFICIAL DE CLOUDINARY
 # ==========================================
 cloudinary.config(
   cloud_name = "r9vobuds",
@@ -238,7 +238,7 @@ if password == "admin123":
     st.sidebar.success("✅ Acceso concedido")
     pestana_admin = st.sidebar.radio("Opciones de Admin", [
         "Cargar Masivo (Excel/CSV)", 
-        "Subida Masiva de Fotos (ZIP a la Nube)",
+        "Subida Masiva de Fotos (ZIP Ultrarrápido)",
         "Cambiar Logo de Empresa"
     ])
     
@@ -287,9 +287,9 @@ if password == "admin123":
             except Exception as e:
                 st.sidebar.error(f"Error: {e}")
 
-    elif pestana_admin == "Subida Masiva de Fotos (ZIP a la Nube)":
-        st.sidebar.subheader("Subir Fotos a Cloudinary (ZIP Automático)")
-        st.sidebar.markdown("Sube tu `.zip`. El sistema leerá el número de cada foto, la subirá a Cloudinary de forma permanente y actualizará el catálogo automáticamente.")
+    elif pestana_admin == "Subida Masiva de Fotos (ZIP Ultrarrápido)":
+        st.sidebar.subheader("Subida Masiva Optimizada")
+        st.sidebar.markdown("Sube tu archivo `.zip`. El sistema indexará las fotos al instante y actualizará la base de datos de manera eficiente.")
         archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP con fotos", type=["zip"])
         
         if archivo_zip is not None:
@@ -300,6 +300,7 @@ if password == "admin123":
             with zipfile.ZipFile(archivo_zip, 'r') as z:
                 z.extractall(TEMP_ZIP_DIR)
             
+            # Crear mapa rápido optimizado de archivos encontrados
             mapa_fotos = {}
             for root, dirs, files in os.walk(TEMP_ZIP_DIR):
                 for file in files:
@@ -312,30 +313,28 @@ if password == "admin123":
             df_actual = st.session_state.df_productos
             df_actual.columns = [c.strip().upper() for c in df_actual.columns]
             
-            barra_progreso = st.sidebar.progress(0)
-            total_articulos = len(df_actual)
             actualizados = 0
-
+            
+            # Procesamiento optimizado por lotes (solo sube las fotos de artículos existentes que aún no tengan link web)
             for idx, row in df_actual.iterrows():
                 art_num = str(row['ARTICULO']).strip()
                 art_limpio = re.sub(r'\D', '', art_num)
+                img_actual = str(row.get('IMAGEN', ''))
                 
-                if art_limpio in mapa_fotos:
+                # Si el artículo tiene foto en el ZIP y no tiene URL permanente de Cloudinary aún
+                if art_limpio in mapa_fotos and ('cloudinary.com' not in img_actual):
                     foto_path = mapa_fotos[art_limpio]
                     try:
-                        # Subir permanentemente a Cloudinary y capturar URL segura
-                        res = cloudinary.uploader.upload(foto_path)
+                        res = cloudinary.uploader.upload(foto_path, folder="catalogo_rimar")
                         secure_url = res.get("secure_url")
                         df_actual.loc[idx, 'IMAGEN'] = secure_url
                         actualizados += 1
                     except Exception as ex:
                         pass
-                
-                barra_progreso.progress(int((idx + 1) / total_articulos * 100))
 
             st.session_state.df_productos = df_actual
             df_actual.to_csv(DATA_FILE, index=False)
-            st.sidebar.success(f"¡Se asociaron, subieron y guardaron {actualizados} fotos permanentemente en la nube!")
+            st.sidebar.success(f"¡Proceso completado! Se sincronizaron {actualizados} fotos nuevas a la nube exitosamente.")
             st.rerun()
 
     elif pestana_admin == "Cambiar Logo de Empresa":
@@ -402,7 +401,7 @@ for i, row in df_filtrado.iterrows():
                         df.loc[original_idx, 'CATEGORIA'] = clasificar_repuesto(nuevo_desc)
                         
                         if nueva_foto is not None:
-                            res_up = cloudinary.uploader.upload(nueva_foto)
+                            res_up = cloudinary.uploader.upload(nueva_foto, folder="catalogo_rimar")
                             df.loc[original_idx, 'IMAGEN'] = res_up.get("secure_url")
                             
                         st.session_state.df_productos = df
@@ -436,7 +435,6 @@ for i, row in df_filtrado.iterrows():
                 </div>
             """, unsafe_allow_html=True)
             
-            # Carga garantizada desde la URL permanente de Cloudinary
             st.image(img_url, use_container_width=True)
             
             mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
