@@ -6,6 +6,7 @@ import re
 import shutil
 import cloudinary
 import cloudinary.uploader
+import urllib.parse
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -99,6 +100,10 @@ h1, h2, h3 {
 }
 </style>
 """, unsafe_allow_html=True)
+
+# Lógica del estado del Carrito de Compras
+if "carrito" not in st.session_state:
+    st.session_state.carrito = []
 
 DATA_FILE = "inventario_rimar.csv"
 LOGO_FILE = "logo_rimar.png"
@@ -242,6 +247,50 @@ if "Duban" in asesor_elegido:
 else:
     telefono_activo = "573106804713"
     nombre_asesor = "Maritza Moreno"
+
+st.sidebar.divider()
+
+# ==========================================
+# SECCIÓN DEL CARRITO DE COMPRAS EN BARRA LATERAL
+# ==========================================
+st.sidebar.header("🛒 Mi Carrito de Compras")
+
+if len(st.session_state.carrito) == 0:
+    st.sidebar.info("El carrito está vacío. ¡Agrega repuestos desde el catálogo!")
+else:
+    total_pedido = 0
+    for i, item in enumerate(st.session_state.carrito):
+        # Muestra cada articulo compacto en el sidebar
+        st.sidebar.markdown(f"**{item['cantidad']}x** {item['descripcion'][:30]}...")
+        st.sidebar.markdown(f"Art: `{item['articulo']}` | Subtotal: **${item['precio_total']:,}**")
+        
+        if st.sidebar.button("❌ Quitar", key=f"quitar_cart_{i}"):
+            st.session_state.carrito.pop(i)
+            st.rerun()
+        st.sidebar.markdown("---")
+        total_pedido += item['precio_total']
+
+    # Resumen del carrito
+    st.sidebar.markdown(f"### Total: ${total_pedido:,} <span class='iva-badge'>+IVA</span>", unsafe_allow_html=True)
+    st.sidebar.markdown(f"**Asesor de Venta:** {nombre_asesor}")
+
+    # Generar mensaje para WhatsApp con todo el pedido
+    mensaje_pedido = f"Hola {nombre_asesor}, me interesa realizar el siguiente pedido del catálogo:\n\n"
+    for item in st.session_state.carrito:
+        mensaje_pedido += f"👉 {item['cantidad']}x [Art: {item['articulo']}] {item['descripcion']} - Subtotal: ${item['precio_total']:,}\n"
+    
+    mensaje_pedido += f"\n*💰 Total a pagar:* ${total_pedido:,} + IVA\n\n¿Me confirmas disponibilidad de estos repuestos?"
+    url_wa_carrito = f"https://wa.me/{telefono_activo}?text={urllib.parse.quote(mensaje_pedido)}"
+
+    st.sidebar.markdown(f"""
+        <a href="{url_wa_carrito}" target="_blank" style="display:block;text-align:center;padding:12px;background-color:#25D366;color:white;text-decoration:none;border-radius:6px;font-weight:bold;margin-bottom:10px;font-size:1.05rem;">
+            ✅ Enviar Pedido por WhatsApp
+        </a>
+    """, unsafe_allow_html=True)
+
+    if st.sidebar.button("🗑️ Vaciar Carrito", use_container_width=True):
+        st.session_state.carrito = []
+        st.rerun()
 
 st.sidebar.divider()
 
@@ -434,20 +483,37 @@ if st.session_state.detalle_articulo is not None:
             precio_total = int(precio_unit) * cantidad if pd.notna(precio_unit) else 0
             precio_total_fmt = f"${precio_total:,}"
             
-            st.markdown(f"**Total a Pagar ({cantidad} unidad/es):** `{precio_total_fmt} +IVA`")
+            st.markdown(f"**Subtotal ({cantidad} unidad/es):** `{precio_total_fmt} +IVA`")
             
             desc_text = str(prod.get('DESCRIPSION'))
             art_code = str(prod.get('ARTICULO'))
-            mensaje = f"Hola {nombre_asesor}, me interesa adquirir {cantidad} unidad(es) del repuesto *{desc_text}* (Artículo: {art_code}) por un valor total de {precio_total_fmt} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
-            url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
 
-            # HTML formateado sin espacios iniciales
-            html_btn_whatsapp = f"""
-<div style="margin-top: 15px;">
-    <a href="{url_whatsapp}" target="_blank" style="display:block;text-align:center;padding:12px 20px;background-color:#25D366;color:white;text-decoration:none;border-radius:6px;font-weight:bold;font-size:1.1rem;">💬 Pedir {cantidad} unidad(es) por WhatsApp</a>
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Botón Principal: Agregar al carrito
+            if st.button(f"🛒 Agregar {cantidad} unidad(es) al Carrito", type="primary", use_container_width=True):
+                st.session_state.carrito.append({
+                    'articulo': art_code,
+                    'descripcion': desc_text,
+                    'cantidad': cantidad,
+                    'precio_unitario': int(precio_unit) if pd.notna(precio_unit) else 0,
+                    'precio_total': precio_total
+                })
+                st.session_state.detalle_articulo = None
+                st.rerun()
+
+            # Botón Secundario: Comprar solo este artículo (directo por WhatsApp)
+            mensaje_directo = f"Hola {nombre_asesor}, me interesa adquirir {cantidad} unidad(es) del repuesto *{desc_text}* (Artículo: {art_code}) por un valor total de {precio_total_fmt} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
+            url_wa_directo = f"https://wa.me/{telefono_activo}?text={urllib.parse.quote(mensaje_directo)}"
+
+            html_btn_wa_solo = f"""
+<div style="margin-top: 10px;">
+    <a href="{url_wa_directo}" target="_blank" style="display:block;text-align:center;padding:10px 20px;background-color:#fff;color:#25D366;border: 2px solid #25D366;text-decoration:none;border-radius:6px;font-weight:bold;font-size:1rem;">
+        💬 O Comprar solo este por WhatsApp
+    </a>
 </div>
 """
-            st.markdown(html_btn_whatsapp, unsafe_allow_html=True)
+            st.markdown(html_btn_wa_solo, unsafe_allow_html=True)
             
         st.stop()
 
