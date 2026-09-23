@@ -11,7 +11,7 @@ import shutil
 # CONFIGURACIÓN DE CLOUDINARY (Tus datos oficiales)
 # ==========================================
 cloudinary.config(
-  cloud_name = "Rimar",
+  cloud_name = "Rimar",  # <-- Aquí está el error
   api_key = "973711151787113",
   api_secret = "l38OxV1brV1BxfmQkSTKjQEMYYU",
   secure = True
