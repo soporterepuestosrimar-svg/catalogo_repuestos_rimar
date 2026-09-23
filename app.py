@@ -11,6 +11,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from streamlit_image_zoom import image_zoom
 
 # ==========================================
 # CONFIGURACIÓN DE CLOUDINARY
@@ -29,7 +30,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilos CSS avanzados para alinear tarjetas
+# Estilos CSS avanzados para alinear tarjetas de manera prolija
 st.markdown("""
     <style>
     .main {
@@ -63,21 +64,6 @@ st.markdown("""
         justify-content: space-between;
         height: 100%;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .product-img-container {
-        width: 100%;
-        height: 180px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        background-color: #fff;
-        margin-bottom: 10px;
-        border-radius: 6px;
-    }
-    .product-img-container img {
-        max-height: 180px;
-        object-fit: contain;
     }
     .product-title {
         font-size: 1.05rem;
@@ -160,7 +146,6 @@ def generar_pdf(dataframe_filtrado, nombre_asesor, telefono_asesor):
     elementos.append(Paragraph("Confianza que mueve tu motor | Contacto Asesor: " + nombre_asesor + " (" + telefono_asesor + ")", estilo_sub))
     elementos.append(Spacer(1, 15))
     
-    # Armar datos para la tabla del PDF
     datos_tabla = [["Artículo", "Descripción", "Marca", "Categoría", "Precio (+IVA)"]]
     
     for _, row in dataframe_filtrado.iterrows():
@@ -260,7 +245,8 @@ if password == "admin123":
     ])
     
     if pestana_admin == "Cargar Masivo (Excel/CSV)":
-        st.sidebar.subheader("Carga Masiva de Inventario")
+        st.sidebar.subheader("Carga Masiva (Acumulativa)")
+        st.sidebar.markdown("Sube nuevos archivos. **Los artículos nuevos se agregarán sin borrar lo anterior.**")
         archivo_subido = st.sidebar.file_uploader("Sube tu archivo (Excel/CSV)", type=["csv", "xlsx"])
         
         if archivo_subido is not None:
@@ -286,10 +272,18 @@ if password == "admin123":
                         df_subido['MARCA'] = "GENERICA"
                     
                     df_subido['CATEGORIA'] = df_subido['DESCRIPSION'].apply(clasificar_repuesto)
+                    
+                    df_actual = st.session_state.df_productos
+                    df_actual.columns = [c.strip().upper() for c in df_actual.columns]
+                    
+                    df_subido['ARTICULO'] = df_subido['ARTICULO'].astype(str)
+                    df_actual['ARTICULO'] = df_actual['ARTICULO'].astype(str)
+                    
+                    df_combinado = pd.concat([df_actual, df_subido]).drop_duplicates(subset=['ARTICULO'], keep='last').reset_index(drop=True)
                         
-                    st.session_state.df_productos = df_subido
-                    df_subido.to_csv(DATA_FILE, index=False)
-                    st.sidebar.success("¡Inventario cargado con éxito!")
+                    st.session_state.df_productos = df_combinado
+                    df_combinado.to_csv(DATA_FILE, index=False)
+                    st.sidebar.success("¡Artículos agregados exitosamente!")
                     st.rerun()
                 else:
                     st.sidebar.error("El archivo debe contener: ARTICULO, DESCRIPSION, PRECIO")
@@ -338,7 +332,7 @@ if password == "admin123":
 
             st.session_state.df_productos = df_actual
             df_actual.to_csv(DATA_FILE, index=False)
-            st.sidebar.success(f"¡Se asociaron y subieron {actualizados} fotos a la nube con éxito!")
+            st.sidebar.success(f"¡Se asociaron y subieron {actualizados} fotos con éxito!")
             st.rerun()
 
     elif pestana_admin == "Cambiar Logo de Empresa":
@@ -382,7 +376,7 @@ st.divider()
 if df_filtrado.empty:
     st.warning("No se encontraron repuestos con los filtros seleccionados.")
 
-# --- MOSTRAR PRODUCTOS EN CUADRÍCULA ALINEADA ---
+# --- MOSTRAR PRODUCTOS EN CUADRÍCULA ---
 cols = st.columns(3)
 for i, row in df_filtrado.iterrows():
     with cols[i % 3]:
@@ -423,28 +417,34 @@ for i, row in df_filtrado.iterrows():
         precio_num = row.get('PRECIO', 0)
         precio_val = f"${int(precio_num):,}" if pd.notna(precio_num) else "$0"
         
-        mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
-        url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
-
-        st.markdown(f"""
-            <div class="product-card">
-                <div>
-                    <div class="product-img-container">
-                        <img src="{img_url}" alt="Repuesto">
-                    </div>
-                    <div style="font-size: 0.8em; color: #666; margin-bottom: 4px;">
-                        🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}
-                    </div>
-                    <div class="product-title">{desc_val}</div>
-                    <div style="font-size: 1.1rem; font-weight: bold; color: #0A1628; margin-bottom: 12px;">
-                        Precio: {precio_val} <span class="iva-badge">+IVA</span>
+        # --- TARJETA VISUAL CON ZOOM DE IMAGEN ---
+        with st.container():
+            st.markdown(f"""
+                <div class="product-card">
+                    <div>
+                        <div style="font-size: 0.8em; color: #666; margin-bottom: 4px;">
+                            🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}
+                        </div>
+                        <div class="product-title">{desc_val}</div>
+                        <div style="font-size: 1.1rem; font-weight: bold; color: #0A1628; margin-bottom: 8px;">
+                            Precio: {precio_val} <span class="iva-badge">+IVA</span>
+                        </div>
                     </div>
                 </div>
-                <div>
+            """, unsafe_allow_html=True)
+            
+            # Componente interactivo para mostrar la foto y permitir hacer zoom al hacer clic
+            image_zoom(img_url, mode="both", size=300, zoom_factor=2.0)
+            
+            mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
+            url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
+
+            st.markdown(f"""
+                <div style="margin-top: 10px; margin-bottom: 20px;">
                     <a href="{url_whatsapp}" target="_blank" style="display:block;text-align:center;padding:10px 15px;background-color:#25D366;color:white;text-decoration:none;border-radius:5px;font-weight:bold;">💬 Pedir con {nombre_asesor.split()[0]}</a>
                 </div>
-            </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+            st.divider()
 
 st.markdown("---")
 st.markdown("© 2026 **Repuestos Rimar** - Todos los derechos reservados. Contacto General: **+57 350 8258778**")
