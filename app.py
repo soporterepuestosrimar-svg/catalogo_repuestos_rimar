@@ -11,7 +11,6 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from streamlit_image_zoom import image_zoom
 
 # ==========================================
 # CONFIGURACIÓN DE CLOUDINARY
@@ -58,23 +57,22 @@ st.markdown("""
         border: 1px solid #e0e0e0;
         border-radius: 8px;
         padding: 15px;
-        margin-bottom: 20px;
+        margin-bottom: 15px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        height: 100%;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     .product-title {
         font-size: 1.05rem;
         font-weight: bold;
         color: #0A1628;
-        height: 55px;
+        height: 50px;
         overflow: hidden;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -417,7 +415,7 @@ for i, row in df_filtrado.iterrows():
         precio_num = row.get('PRECIO', 0)
         precio_val = f"${int(precio_num):,}" if pd.notna(precio_num) else "$0"
         
-        # --- TARJETA VISUAL CON ZOOM DE IMAGEN ---
+        # --- TARJETA VISUAL PROLIJA ---
         with st.container():
             st.markdown(f"""
                 <div class="product-card">
@@ -433,8 +431,8 @@ for i, row in df_filtrado.iterrows():
                 </div>
             """, unsafe_allow_html=True)
             
-            # Componente interactivo para mostrar la foto y permitir hacer zoom al hacer clic
-            image_zoom(img_url, mode="both", size=300, zoom_factor=2.0)
+            # Imagen estándar nativa clara y fluida sin errores de formato
+            st.image(img_url, use_container_width=True)
             
             mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
             url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
