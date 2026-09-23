@@ -229,12 +229,28 @@ st.sidebar.divider()
 
 # --- PANEL DE ADMINISTRACIÓN ---
 st.sidebar.header("⚙️ Panel de Administración")
-password = st.sidebar.text_input("Contraseña de Administrador", type="password")
-modo_admin = False
 
-if password == "admin123":
-    modo_admin = True
-    st.sidebar.success("✅ Acceso concedido")
+if "admin_logged" not in st.session_state:
+    st.session_state.admin_logged = False
+
+if not st.session_state.admin_logged:
+    password = st.sidebar.text_input("Contraseña de Administrador", type="password")
+    if password == "admin123":
+        st.session_state.admin_logged = True
+        st.rerun()
+    elif password != "":
+        st.sidebar.error("❌ Contraseña incorrecta")
+
+modo_admin = st.session_state.admin_logged
+
+if modo_admin:
+    st.sidebar.success("✅ Acceso concedido como Administrador")
+    
+    # --- BOTÓN PARA SALIR DEL PANEL ADMIN ---
+    if st.sidebar.button("🔒 Cerrar Sesión Admin"):
+        st.session_state.admin_logged = False
+        st.rerun()
+
     pestana_admin = st.sidebar.radio("Opciones de Admin", [
         "Cargar Masivo (Excel/CSV)", 
         "Subida Masiva de Fotos (ZIP Permanente)",
@@ -332,9 +348,6 @@ if password == "admin123":
             st.sidebar.success("¡Logo actualizado con éxito!")
             st.rerun()
 
-elif password != "":
-    st.sidebar.error("❌ Contraseña incorrecta")
-
 # --- APLICAR FILTROS EN PANTALLA ---
 df_filtrado = df.copy()
 
@@ -373,7 +386,6 @@ for fila in filas:
     cols = st.columns(num_cols)
     for idx, row in enumerate(fila):
         with cols[idx]:
-            original_idx = row.get('index', row.get('ARTICULO'))
             art_val = str(row.get('ARTICULO', 'S/N'))
             
             if modo_admin:
