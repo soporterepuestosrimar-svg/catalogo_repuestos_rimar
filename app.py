@@ -3,7 +3,6 @@ import pandas as pd
 import os
 import zipfile
 import re
-import shutil
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -281,9 +280,6 @@ if password == "admin123":
         archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP", type=["zip"])
         
         if archivo_zip is not None:
-            # Extraer todas las fotos localmente de forma ultrarrápida
-            if os.path.exists(LOCAL_IMG_DIR):
-                shutil.rmtree(LOCAL_IMG_DIR)
             os.makedirs(LOCAL_IMG_DIR, exist_ok=True)
                 
             with zipfile.ZipFile(archivo_zip, 'r') as z:
@@ -307,7 +303,6 @@ if password == "admin123":
                 art_limpio = re.sub(r'\D', '', art_num)
                 
                 if art_limpio in mapa_fotos:
-                    # Guardamos la ruta local de la foto de manera inmediata sin esperas de red
                     df_actual.loc[idx, 'IMAGEN'] = mapa_fotos[art_limpio]
                     actualizados += 1
 
@@ -380,9 +375,10 @@ for i, row in df_filtrado.iterrows():
                         df.loc[original_idx, 'CATEGORIA'] = clasificar_repuesto(nuevo_desc)
                         
                         if nueva_foto is not None:
-                            # Subir individual por admin sí usa cloud por comodidad o guarda local
-                            res_up = cloudinary.uploader.upload(nueva_foto)
-                            df.loc[original_idx, 'IMAGEN'] = res_up.get("secure_url")
+                            foto_path_ind = os.path.join(LOCAL_IMG_DIR, f"{art_val}.jpg")
+                            with open(foto_path_ind, "wb") as f_ind:
+                                f_ind.write(nueva_foto.getbuffer())
+                            df.loc[original_idx, 'IMAGEN'] = foto_path_ind
                             
                         st.session_state.df_productos = df
                         df.to_csv(DATA_FILE, index=False)
@@ -413,7 +409,6 @@ for i, row in df_filtrado.iterrows():
                 </div>
             """, unsafe_allow_html=True)
             
-            # Carga fluida e inmediata de la imagen (sea link web o archivo local del ZIP)
             st.image(img_url, use_container_width=True)
             
             mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
