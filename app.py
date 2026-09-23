@@ -8,6 +8,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from PIL import Image
 
 # Configuración de la página
 st.set_page_config(
@@ -385,7 +386,7 @@ for i, row in df_filtrado.iterrows():
                         st.success("¡Actualizado con éxito!")
                         st.rerun()
 
-        img_url = row.get('IMAGEN', "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400")
+        img_source = row.get('IMAGEN', "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400")
         
         marca_val = row.get('MARCA', 'GENERICA')
         desc_val = str(row.get('DESCRIPSION', 'Sin descripción'))
@@ -409,7 +410,17 @@ for i, row in df_filtrado.iterrows():
                 </div>
             """, unsafe_allow_html=True)
             
-            st.image(img_url, use_container_width=True)
+            # Procesador inteligente para mostrar correctamente la imagen (sea link web o archivo local del ZIP)
+            try:
+                if str(img_source).startswith("http"):
+                    st.image(img_source, use_container_width=True)
+                elif os.path.exists(str(img_source)):
+                    img_pil = Image.open(str(img_source))
+                    st.image(img_pil, use_container_width=True)
+                else:
+                    st.image("https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400", use_container_width=True)
+            except Exception:
+                st.image("https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400", use_container_width=True)
             
             mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
             url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
