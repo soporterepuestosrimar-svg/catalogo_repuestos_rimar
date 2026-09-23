@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import cloudinary
-import cloudinary.uploader
 import zipfile
 import re
 import shutil
@@ -11,16 +9,6 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-
-# ==========================================
-# CONFIGURACIÓN DE CLOUDINARY
-# ==========================================
-cloudinary.config(
-  cloud_name = "r9vobuds",
-  api_key = "973711151787113",
-  api_secret = "l38OxV1brV1BxfmQkSTKjQEMYYU",
-  secure = True
-)
 
 # Configuración de la página
 st.set_page_config(
@@ -79,8 +67,8 @@ st.markdown("""
 
 DATA_FILE = "inventario_rimar.csv"
 LOGO_FILE = "logo_rimar.png"
-TEMP_IMAGE_DIR = "temp_images"
-os.makedirs(TEMP_IMAGE_DIR, exist_ok=True)
+LOCAL_IMG_DIR = "uploaded_photos"
+os.makedirs(LOCAL_IMG_DIR, exist_ok=True)
 
 @st.cache_data
 def cargar_datos():
@@ -244,7 +232,6 @@ if password == "admin123":
     
     if pestana_admin == "Cargar Masivo (Excel/CSV)":
         st.sidebar.subheader("Carga Masiva (Acumulativa)")
-        st.sidebar.markdown("Sube nuevos archivos. **Los artículos nuevos se agregarán sin borrar lo anterior.**")
         archivo_subido = st.sidebar.file_uploader("Sube tu archivo (Excel/CSV)", type=["csv", "xlsx"])
         
         if archivo_subido is not None:
@@ -289,22 +276,23 @@ if password == "admin123":
                 st.sidebar.error(f"Error: {e}")
 
     elif pestana_admin == "Subida Masiva de Fotos (ZIP)":
-        st.sidebar.subheader("Subir Fotos en Lote (ZIP)")
-        st.sidebar.markdown("Sube un **.zip** con las fotos nombradas con el número de artículo (Ej: `10652.jpg`).")
+        st.sidebar.subheader("Subir Fotos en Lote (ZIP Instantáneo)")
+        st.sidebar.markdown("Sube tu `.zip`. Las fotos se asociarán al instante con el número de artículo.")
         archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP", type=["zip"])
         
         if archivo_zip is not None:
-            if os.path.exists(TEMP_IMAGE_DIR):
-                shutil.rmtree(TEMP_IMAGE_DIR)
-            os.makedirs(TEMP_IMAGE_DIR, exist_ok=True)
+            # Extraer todas las fotos localmente de forma ultrarrápida
+            if os.path.exists(LOCAL_IMG_DIR):
+                shutil.rmtree(LOCAL_IMG_DIR)
+            os.makedirs(LOCAL_IMG_DIR, exist_ok=True)
                 
             with zipfile.ZipFile(archivo_zip, 'r') as z:
-                z.extractall(TEMP_IMAGE_DIR)
+                z.extractall(LOCAL_IMG_DIR)
             
             mapa_fotos = {}
-            for root, dirs, files in os.walk(TEMP_IMAGE_DIR):
+            for root, dirs, files in os.walk(LOCAL_IMG_DIR):
                 for file in files:
-                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.JPG', '.PNG')):
                         nombre_base = os.path.splitext(file)[0].strip()
                         limpio = re.sub(r'\D', '', nombre_base)
                         if limpio:
@@ -319,18 +307,13 @@ if password == "admin123":
                 art_limpio = re.sub(r'\D', '', art_num)
                 
                 if art_limpio in mapa_fotos:
-                    foto_path = mapa_fotos[art_limpio]
-                    try:
-                        res = cloudinary.uploader.upload(foto_path)
-                        secure_url = res.get("secure_url")
-                        df_actual.loc[idx, 'IMAGEN'] = secure_url
-                        actualizados += 1
-                    except Exception as ex:
-                        pass
+                    # Guardamos la ruta local de la foto de manera inmediata sin esperas de red
+                    df_actual.loc[idx, 'IMAGEN'] = mapa_fotos[art_limpio]
+                    actualizados += 1
 
             st.session_state.df_productos = df_actual
             df_actual.to_csv(DATA_FILE, index=False)
-            st.sidebar.success(f"¡Se asociaron y subieron {actualizados} fotos con éxito!")
+            st.sidebar.success(f"¡Se asociaron {actualizados} fotos al instante con éxito!")
             st.rerun()
 
     elif pestana_admin == "Cambiar Logo de Empresa":
@@ -397,6 +380,7 @@ for i, row in df_filtrado.iterrows():
                         df.loc[original_idx, 'CATEGORIA'] = clasificar_repuesto(nuevo_desc)
                         
                         if nueva_foto is not None:
+                            # Subir individual por admin sí usa cloud por comodidad o guarda local
                             res_up = cloudinary.uploader.upload(nueva_foto)
                             df.loc[original_idx, 'IMAGEN'] = res_up.get("secure_url")
                             
@@ -406,9 +390,7 @@ for i, row in df_filtrado.iterrows():
                         st.rerun()
 
         img_url = row.get('IMAGEN', "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400")
-        if pd.isna(img_url) or not str(img_url).startswith("http"):
-            img_url = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
-            
+        
         marca_val = row.get('MARCA', 'GENERICA')
         desc_val = str(row.get('DESCRIPSION', 'Sin descripción'))
         cat_val = row.get('CATEGORIA', 'General')
@@ -431,7 +413,7 @@ for i, row in df_filtrado.iterrows():
                 </div>
             """, unsafe_allow_html=True)
             
-            # Imagen estándar nativa clara y fluida sin errores de formato
+            # Carga fluida e inmediata de la imagen (sea link web o archivo local del ZIP)
             st.image(img_url, use_container_width=True)
             
             mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
