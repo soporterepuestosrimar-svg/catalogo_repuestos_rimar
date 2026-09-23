@@ -30,74 +30,16 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilos CSS avanzados (Alineación perfecta y tarjetas idénticas)
+# Estilos CSS avanzados
 st.markdown("""
 <style>
-.main {
-    background-color: #f8f9fa;
-}
-h1, h2, h3 {
-    color: #0A1628;
-}
-.stButton>button {
-    background-color: #E31E24;
-    color: white;
-    font-weight: bold;
-    width: 100%;
-    border-radius: 6px;
-}
-.btn-volver>button {
-    background-color: #6c757d !important;
-    color: white !important;
-}
-.iva-badge {
-    background-color: #FFC107;
-    color: #0A1628;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.8em;
-    font-weight: bold;
-    margin-left: 6px;
-}
-.product-card {
-    background-color: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 10px;
-    padding: 16px;
-    margin-bottom: 20px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.04);
-    height: 100%;
-}
-.product-title {
-    font-size: 0.95rem;
-    font-weight: bold;
-    color: #0A1628;
-    height: 44px;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    margin-bottom: 8px;
-}
-.img-container {
-    width: 100%;
-    height: 200px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
-    margin-bottom: 15px;
-    border-radius: 8px;
-    background-color: #ffffff;
-}
-.img-container img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-}
+.main { background-color: #f8f9fa; }
+h1, h2, h3 { color: #0A1628; }
+.stButton>button { background-color: #E31E24; color: white; font-weight: bold; width: 100%; border-radius: 6px; }
+.btn-volver>button { background-color: #6c757d !important; color: white !important; }
+.iva-badge { background-color: #FFC107; color: #0A1628; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; font-weight: bold; margin-left: 6px; }
+.product-card { background-color: white; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; margin-bottom: 20px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.04); height: 100%; }
+.product-title { font-size: 0.95rem; font-weight: bold; color: #0A1628; height: 44px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-bottom: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -250,50 +192,6 @@ else:
 
 st.sidebar.divider()
 
-# ==========================================
-# SECCIÓN DEL CARRITO DE COMPRAS EN BARRA LATERAL
-# ==========================================
-st.sidebar.header("🛒 Mi Carrito de Compras")
-
-if len(st.session_state.carrito) == 0:
-    st.sidebar.info("El carrito está vacío. ¡Agrega repuestos desde el catálogo!")
-else:
-    total_pedido = 0
-    for i, item in enumerate(st.session_state.carrito):
-        # Muestra cada articulo compacto en el sidebar
-        st.sidebar.markdown(f"**{item['cantidad']}x** {item['descripcion'][:30]}...")
-        st.sidebar.markdown(f"Art: `{item['articulo']}` | Subtotal: **${item['precio_total']:,}**")
-        
-        if st.sidebar.button("❌ Quitar", key=f"quitar_cart_{i}"):
-            st.session_state.carrito.pop(i)
-            st.rerun()
-        st.sidebar.markdown("---")
-        total_pedido += item['precio_total']
-
-    # Resumen del carrito
-    st.sidebar.markdown(f"### Total: ${total_pedido:,} <span class='iva-badge'>+IVA</span>", unsafe_allow_html=True)
-    st.sidebar.markdown(f"**Asesor de Venta:** {nombre_asesor}")
-
-    # Generar mensaje para WhatsApp con todo el pedido
-    mensaje_pedido = f"Hola {nombre_asesor}, me interesa realizar el siguiente pedido del catálogo:\n\n"
-    for item in st.session_state.carrito:
-        mensaje_pedido += f"👉 {item['cantidad']}x [Art: {item['articulo']}] {item['descripcion']} - Subtotal: ${item['precio_total']:,}\n"
-    
-    mensaje_pedido += f"\n*💰 Total a pagar:* ${total_pedido:,} + IVA\n\n¿Me confirmas disponibilidad de estos repuestos?"
-    url_wa_carrito = f"https://wa.me/{telefono_activo}?text={urllib.parse.quote(mensaje_pedido)}"
-
-    st.sidebar.markdown(f"""
-        <a href="{url_wa_carrito}" target="_blank" style="display:block;text-align:center;padding:12px;background-color:#25D366;color:white;text-decoration:none;border-radius:6px;font-weight:bold;margin-bottom:10px;font-size:1.05rem;">
-            ✅ Enviar Pedido por WhatsApp
-        </a>
-    """, unsafe_allow_html=True)
-
-    if st.sidebar.button("🗑️ Vaciar Carrito", use_container_width=True):
-        st.session_state.carrito = []
-        st.rerun()
-
-st.sidebar.divider()
-
 # --- PANEL DE ADMINISTRACIÓN ---
 st.sidebar.header("⚙️ Panel de Administración")
 
@@ -429,6 +327,7 @@ if filtro_categoria != "Todas":
 if filtro_marca != "Todas" and 'MARCA' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['MARCA'].astype(str) == filtro_marca]
 
+
 # =======================================================
 # LÓGICA DE VISTA AMPLIADA (MODAL) Y SUMADOR DE CANTIDADES
 # =======================================================
@@ -457,12 +356,8 @@ if st.session_state.detalle_articulo is not None:
             if pd.isna(img_detalle) or not str(img_detalle).startswith("http"):
                 img_detalle = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
             
-            # HTML formateado sin espacios iniciales
-            html_img_detalle = f"""
-<div class="img-container" style="height: 400px; border: 1px solid #ddd;">
-    <img src="{img_detalle}">
-</div>
-"""
+            # HTML COMPACTADO PARA EVITAR CONFLICTOS DE MARKDOWN
+            html_img_detalle = f"""<div style="height: 400px; border: 1px solid #ddd; border-radius: 8px; display: flex; justify-content: center; align-items: center; background-color: #fff; overflow: hidden;"><img src="{img_detalle}" style="max-width: 100%; max-height: 100%; object-fit: contain;"></div>"""
             st.markdown(html_img_detalle, unsafe_allow_html=True)
             
         with c2:
@@ -476,7 +371,7 @@ if st.session_state.detalle_articulo is not None:
             st.markdown(f"### Precio Unitario: {precio_fmt} <span class='iva-badge'>+IVA</span>", unsafe_allow_html=True)
             
             st.markdown("---")
-            st.markdown("#### 🔢 Selecciona la cantidad (Usa los botones + y -):")
+            st.markdown("#### 🔢 Selecciona la cantidad:")
             
             cantidad = st.number_input("Cantidad", min_value=1, value=1, step=1, label_visibility="collapsed")
             
@@ -490,7 +385,6 @@ if st.session_state.detalle_articulo is not None:
 
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # Botón Principal: Agregar al carrito
             if st.button(f"🛒 Agregar {cantidad} unidad(es) al Carrito", type="primary", use_container_width=True):
                 st.session_state.carrito.append({
                     'articulo': art_code,
@@ -502,33 +396,57 @@ if st.session_state.detalle_articulo is not None:
                 st.session_state.detalle_articulo = None
                 st.rerun()
 
-            # Botón Secundario: Comprar solo este artículo (directo por WhatsApp)
             mensaje_directo = f"Hola {nombre_asesor}, me interesa adquirir {cantidad} unidad(es) del repuesto *{desc_text}* (Artículo: {art_code}) por un valor total de {precio_total_fmt} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
             url_wa_directo = f"https://wa.me/{telefono_activo}?text={urllib.parse.quote(mensaje_directo)}"
 
-            html_btn_wa_solo = f"""
-<div style="margin-top: 10px;">
-    <a href="{url_wa_directo}" target="_blank" style="display:block;text-align:center;padding:10px 20px;background-color:#fff;color:#25D366;border: 2px solid #25D366;text-decoration:none;border-radius:6px;font-weight:bold;font-size:1rem;">
-        💬 O Comprar solo este por WhatsApp
-    </a>
-</div>
-"""
+            html_btn_wa_solo = f"""<div style="margin-top: 10px;"><a href="{url_wa_directo}" target="_blank" style="display:block;text-align:center;padding:10px 20px;background-color:#fff;color:#25D366;border: 2px solid #25D366;text-decoration:none;border-radius:6px;font-weight:bold;font-size:1rem;">💬 O Comprar solo este por WhatsApp</a></div>"""
             st.markdown(html_btn_wa_solo, unsafe_allow_html=True)
             
         st.stop()
 
-# =======================================================
-# MOSTRAR CATÁLOGO NORMAL (SI NO HAY ARTÍCULO SELECCIONADO)
-# =======================================================
 
-st.markdown("### 📥 Descargar Catálogo")
-pdf_bytes = generar_pdf(df_filtrado, nombre_asesor, telefono_activo)
-st.download_button(
-    label="📄 Descargar Catálogo Filtrado en PDF",
-    data=pdf_bytes,
-    file_name="catalogo_repuestos_rimar.pdf",
-    mime="application/pdf"
-)
+# =======================================================
+# BARRA SUPERIOR: DESCARGAR PDF Y CARRITO DE COMPRAS
+# =======================================================
+col_pdf, col_cart = st.columns([1, 1])
+
+with col_pdf:
+    st.markdown("### 📥 Descargar Catálogo")
+    pdf_bytes = generar_pdf(df_filtrado, nombre_asesor, telefono_activo)
+    st.download_button(
+        label="📄 Descargar Catálogo Filtrado en PDF",
+        data=pdf_bytes,
+        file_name="catalogo_repuestos_rimar.pdf",
+        mime="application/pdf"
+    )
+
+with col_cart:
+    st.markdown("### 🛒 Mi Carrito de Compras")
+    if len(st.session_state.carrito) == 0:
+        st.info("Tu carrito está vacío. ¡Agrega repuestos desde el catálogo!")
+    else:
+        total_items = sum(item['cantidad'] for item in st.session_state.carrito)
+        total_pedido = sum(item['precio_total'] for item in st.session_state.carrito)
+        
+        st.markdown(f"**Has seleccionado:** {total_items} artículos")
+        st.markdown(f"**Total Acumulado:** <span style='font-size:1.2rem;font-weight:bold;color:#0A1628;'>${total_pedido:,}</span> <span class='iva-badge'>+IVA</span>", unsafe_allow_html=True)
+        st.markdown(f"**Asesor de Venta:** {nombre_asesor}")
+        
+        c_enviar, c_vaciar = st.columns([2, 1])
+        with c_enviar:
+            mensaje_pedido = f"Hola {nombre_asesor}, me interesa realizar el siguiente pedido del catálogo:\n\n"
+            for item in st.session_state.carrito:
+                mensaje_pedido += f"👉 {item['cantidad']}x [Art: {item['articulo']}] {item['descripcion']} - Subtotal: ${item['precio_total']:,}\n"
+            mensaje_pedido += f"\n*💰 Total a pagar:* ${total_pedido:,} + IVA\n\n¿Me confirmas disponibilidad?"
+            url_wa_carrito = f"https://wa.me/{telefono_activo}?text={urllib.parse.quote(mensaje_pedido)}"
+            
+            st.markdown(f"""<a href="{url_wa_carrito}" target="_blank" style="display:block;text-align:center;padding:10px;background-color:#25D366;color:white;text-decoration:none;border-radius:6px;font-weight:bold;">✅ Enviar Pedido por WhatsApp</a>""", unsafe_allow_html=True)
+        
+        with c_vaciar:
+            if st.button("🗑️ Vaciar Carrito"):
+                st.session_state.carrito = []
+                st.rerun()
+
 st.divider()
 
 if df_filtrado.empty:
@@ -581,25 +499,9 @@ for fila in filas:
             precio_num = row.get('PRECIO', 0)
             precio_val = f"${int(precio_num):,}" if pd.notna(precio_num) else "$0"
             
-            # --- TARJETA CON CONTENEDOR DE IMAGEN EXACTO Y SIN ESPACIOS INICIALES ---
-            html_tarjeta_catalogo = f"""
-<div class="product-card">
-    <div>
-        <div style="font-size: 0.75em; color: #666; margin-bottom: 4px;">
-            🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}
-        </div>
-        <div class="product-title">{desc_val}</div>
-        
-        <div class="img-container">
-            <img src="{img_url}">
-        </div>
-        
-        <div style="font-size: 1.05rem; font-weight: bold; color: #0A1628; margin-bottom: 10px; text-align: center;">
-            {precio_val} <span class="iva-badge">+IVA</span>
-        </div>
-    </div>
-</div>
-"""
+            # --- TARJETA COMPACTA HTML PARA EVITAR ERRORES DE MARKDOWN ---
+            html_tarjeta_catalogo = f"""<div class="product-card"><div style="font-size: 0.75em; color: #666; margin-bottom: 4px;">🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}</div><div class="product-title">{desc_val}</div><div style="height: 200px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-bottom: 15px; border-radius: 8px; background-color: #ffffff;"><img src="{img_url}" style="max-width: 100%; max-height: 100%; object-fit: contain;"></div><div style="font-size: 1.05rem; font-weight: bold; color: #0A1628; margin-bottom: 10px; text-align: center;">{precio_val} <span class="iva-badge">+IVA</span></div></div>"""
+            
             st.markdown(html_tarjeta_catalogo, unsafe_allow_html=True)
             
             if st.button("🔍 Ver Detalle y Comprar", key=f"btn_det_cat_{art_val}"):
