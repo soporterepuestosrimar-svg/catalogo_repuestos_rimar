@@ -8,7 +8,7 @@ import cloudinary.uploader
 # CONFIGURACIÓN DE CLOUDINARY (Tus datos de la nube)
 # ==========================================
 cloudinary.config(
-  cloud_name = "r9vobuds",
+  cloud_name = "Root",
   api_key = "973711151787113",
   api_secret = "l38OxV1brV1BxfmQkSTKjQEMYYU",
   secure = True
@@ -45,8 +45,8 @@ def cargar_datos():
         return pd.read_csv(DATA_FILE)
     else:
         data = {
-            "articulo": ["RIM-001", "RIM-002", "RIM-003", "RIM-004"],
-            "descripcion": [
+            "codigo": ["RIM-001", "RIM-002", "RIM-003", "RIM-004"],
+            "nombre": [
                 "Amortiguador Delantero Ford / Toyota", 
                 "Bomba de Agua Jeep / Ram", 
                 "Sensor MAP Nissan / Dodge", 
@@ -78,7 +78,7 @@ st.divider()
 
 # --- BARRA LATERAL ---
 st.sidebar.header("🔍 Filtros de Búsqueda")
-busqueda = st.sidebar.text_input("Buscar por artículo, descripción...")
+busqueda = st.sidebar.text_input("Buscar por código, repuesto o marca...")
 
 st.sidebar.header("💬 Contactar Asesor")
 asesor_elegido = st.sidebar.selectbox(
@@ -101,70 +101,84 @@ password = st.sidebar.text_input("Contraseña de Administrador", type="password"
 
 if password == "admin123":
     st.sidebar.success("✅ Acceso concedido")
-    pestana_admin = st.sidebar.radio("Opciones de Admin", ["Añadir / Editar Producto", "Cargar Masivo (CSV/Excel)"])
+    pestana_admin = st.sidebar.radio("Opciones de Admin", ["Añadir Producto", "Editar / Cambiar Foto", "Cargar Masivo (Excel/CSV)"])
     
-    if pestana_admin == "Añadir / Editar Producto":
-        st.sidebar.subheader("Gestión de Artículo")
-        df_actual = st.session_state.df_productos
-        
-        # Opción para seleccionar un artículo existente o crear uno nuevo
-        lista_articulos = ["-- NUEVO ARTÍCULO --"] + df_actual['articulo'].astype(str).tolist()
-        art_seleccionado = st.sidebar.selectbox("Selecciona Artículo (o crea uno nuevo)", lista_articulos)
-        
-        with st.sidebar.form("form_gestion"):
-            if art_seleccionado == "-- NUEVO ARTÍCULO --":
-                n_articulo = st.text_input("Número de Artículo (Ej: 12345 o RIM-005)")
-                n_desc = st.text_input("Descripción del repuesto")
-                n_cat = st.text_input("Categoría")
-                n_precio = st.number_input("Precio ($)", min_value=0, step=1000)
-            else:
-                idx_prod = df_actual[df_actual['articulo'].astype(str) == str(art_seleccionado)].index[0]
-                p_info = df_actual.loc[idx_prod]
-                
-                n_articulo = st.text_input("Número de Artículo", value=str(p_info['articulo']))
-                n_desc = st.text_input("Descripción", value=str(p_info['descripcion']))
-                n_cat = st.text_input("Categoría", value=str(p_info.get('categoria', 'General')))
-                n_precio = st.number_input("Precio ($)", value=int(p_info['precio']), step=1000)
+    if pestana_admin == "Añadir Producto":
+        st.sidebar.subheader("Nuevo Artículo")
+        with st.sidebar.form("form_nuevo"):
+            n_codigo = st.text_input("Código único (ej: RIM-005)")
+            n_nombre = st.text_input("Nombre del repuesto")
+            n_cat = st.text_input("Categoría")
+            n_precio = st.number_input("Precio ($)", min_value=0, step=1000)
+            n_img_file = st.file_uploader("Subir foto desde dispositivo", type=["jpg", "png", "jpeg"])
             
-            n_img_file = st.file_uploader("Subir foto desde tu dispositivo", type=["jpg", "png", "jpeg"])
-            submit_form = st.form_submit_button("Guardar Cambios")
+            submit_add = st.form_submit_button("Guardar Producto")
             
-            if submit_form and n_articulo:
-                # Subir foto a Cloudinary si se seleccionó una nueva
-                img_url_final = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
-                if art_seleccionado != "-- NUEVO ARTÍCULO --":
-                    img_url_final = p_info['imagen']
-                
+            if submit_add and n_codigo and n_nombre:
+                img_url = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
                 if n_img_file is not None:
                     upload_result = cloudinary.uploader.upload(n_img_file)
-                    img_url_final = upload_result.get("secure_url")
+                    img_url = upload_result.get("secure_url")
                 
-                nuevo_reg = {
-                    "articulo": n_articulo,
-                    "descripcion": n_desc,
+                nuevo_reg = pd.DataFrame([{
+                    "codigo": n_codigo,
+                    "nombre": n_nombre,
                     "categoria": n_cat,
                     "precio": n_precio,
-                    "imagen": img_url_final
-                }
-                
-                if art_seleccionado == "-- NUEVO ARTÍCULO --":
-                    df_nuevo = pd.DataFrame([nuevo_reg])
-                    st.session_state.df_productos = pd.concat([st.session_state.df_productos, df_nuevo], ignore_index=True)
-                else:
-                    st.session_state.df_productos.loc[idx_prod] = nuevo_reg
-                
+                    "imagen": img_url
+                }])
+                st.session_state.df_productos = pd.concat([st.session_state.df_productos, nuevo_reg], ignore_index=True)
                 st.session_state.df_productos.to_csv(DATA_FILE, index=False)
-                st.sidebar.success("¡Guardado correctamente!")
+                st.sidebar.success("¡Producto agregado correctamente!")
                 st.rerun()
 
-    elif pestana_admin == "Cargar Masivo (CSV/Excel)":
-        st.sidebar.subheader("Carga Masiva de Inventario")
-        st.sidebar.markdown("Tu archivo debe contener las columnas: `articulo`, `descripcion`, `precio` (y opcionalmente `categoria`, `imagen`)")
-        archivo_subido = st.sidebar.file_uploader("Sube tu archivo", type=["csv", "xlsx"])
+    elif pestana_admin == "Editar / Cambiar Foto":
+        st.sidebar.subheader("Modificar Artículo Existente")
+        df_actual = st.session_state.df_productos
+        
+        if not df_actual.empty:
+            codigo_a_editar = st.sidebar.selectbox("Selecciona el Código del Artículo", df_actual['codigo'].tolist())
+            prod_idx = df_actual[df_actual['codigo'] == codigo_a_editar].index[0]
+            prod_actual = df_actual.loc[prod_idx]
+            
+            with st.sidebar.form("form_editar"):
+                e_nombre = st.text_input("Nombre", value=str(prod_actual['nombre']))
+                e_cat = st.text_input("Categoría", value=str(prod_actual['categoria']))
+                e_precio = st.number_input("Precio ($)", value=int(prod_actual['precio']), step=1000)
+                e_img_file = st.file_uploader("Actualizar foto desde dispositivo (Opcional)", type=["jpg", "png", "jpeg"])
+                
+                submit_edit = st.form_submit_button("Actualizar Artículo")
+                
+                if submit_edit:
+                    img_url_final = prod_actual['imagen']
+                    if e_img_file is not None:
+                        upload_result = cloudinary.uploader.upload(e_img_file)
+                        img_url_final = upload_result.get("secure_url")
+                    
+                    st.session_state.df_productos.at[prod_idx, 'nombre'] = e_nombre
+                    st.session_state.df_productos.at[prod_idx, 'categoria'] = e_cat
+                    st.session_state.df_productos.at[prod_idx, 'precio'] = e_precio
+                    st.session_state.df_productos.at[prod_idx, 'imagen'] = img_url_final
+                    
+                    st.session_state.df_productos.to_csv(DATA_FILE, index=False)
+                    st.sidebar.success("¡Artículo actualizado con éxito!")
+                    st.rerun()
+            
+            if st.sidebar.button("🗑️ Eliminar este artículo"):
+                st.session_state.df_productos = df_actual.drop(prod_idx).reset_index(drop=True)
+                st.session_state.df_productos.to_csv(DATA_FILE, index=False)
+                st.sidebar.success("Artículo eliminado.")
+                st.rerun()
+
+    elif pestana_admin == "Cargar Masivo (Excel/CSV)":
+        st.sidebar.subheader("Subir Inventario Masivo")
+        st.sidebar.markdown("Tu archivo debe contener las columnas: `codigo`, `nombre`, `categoria`, `precio`, `imagen`")
+        archivo_subido = st.sidebar.file_uploader("Sube tu archivo CSV o Excel", type=["csv", "xlsx"])
         
         if archivo_subido is not None:
             try:
                 if archivo_subido.name.endswith('.csv'):
+                    # Intenta leer con coma o con punto y coma de forma automática
                     try:
                         df_subido = pd.read_csv(archivo_subido, sep=',')
                         if len(df_subido.columns) <= 1:
@@ -176,35 +190,23 @@ if password == "admin123":
                 else:
                     df_subido = pd.read_excel(archivo_subido)
                 
-                # Normalizar nombres de columnas a minúsculas por si acaso
-                df_subido.columns = [c.strip().lower() for c in df_subido.columns]
-                
-                # Validar que existan las columnas principales
-                if 'articulo' in df_subido.columns and 'descripcion' in df_subido.columns and 'precio' in df_subido.columns:
-                    if 'imagen' not in df_subido.columns:
-                        df_subido['imagen'] = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
-                    if 'categoria' not in df_subido.columns:
-                        df_subido['categoria'] = "General"
-                        
-                    st.session_state.df_productos = df_subido
-                    df_subido.to_csv(DATA_FILE, index=False)
-                    st.sidebar.success("¡Inventario cargado con éxito!")
-                    st.rerun()
-                else:
-                    st.sidebar.error("El archivo debe tener las columnas: articulo, descripcion, precio")
+                st.session_state.df_productos = df_subido
+                df_subido.to_csv(DATA_FILE, index=False)
+                st.sidebar.success("¡Inventario cargado y actualizado con éxito!")
+                st.rerun()
             except Exception as e:
-                st.sidebar.error(f"Error al procesar el archivo: {e}")
+                st.sidebar.error(f"Error al leer el archivo: Revisa que las columnas coincidan.")
 
 elif password != "":
     st.sidebar.error("❌ Contraseña incorrecta")
 
-# --- VISUALIZACIÓN DE PRODUCTOS ---
+# --- VISUALIZACIÓN ---
 df = st.session_state.df_productos
 if busqueda:
     df_filtrado = df[
-        df['articulo'].astype(str).str.lower().str.contains(busqueda.lower()) |
-        df['descripcion'].astype(str).str.lower().str.contains(busqueda.lower()) |
-        df.get('categoria', pd.Series(['']*len(df))).astype(str).str.lower().str.contains(busqueda.lower())
+        df['codigo'].astype(str).str.lower().str.contains(busqueda.lower()) |
+        df['nombre'].astype(str).str.lower().str.contains(busqueda.lower()) |
+        df['categoria'].astype(str).str.lower().str.contains(busqueda.lower())
     ]
 else:
     df_filtrado = df
@@ -218,14 +220,14 @@ for i, row in df_filtrado.iterrows():
         img_url = row['imagen'] if pd.notna(row['imagen']) and str(row['imagen']).startswith("http") else "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
         st.image(img_url, use_container_width=True)
         
-        st.caption(f"🆔 **Artículo:** {row['articulo']}")
-        st.subheader(row['descripcion'])
-        st.write(f"**Categoría:** {row.get('categoria', 'General')}")
+        st.caption(f"🆔 **Código:** {row['codigo']}")
+        st.subheader(row['nombre'])
+        st.write(f"**Categoría:** {row['categoria']}")
         
         precio_val = f"${int(row['precio']):,}" if pd.notna(row['precio']) else "$0"
         st.write(f"**Precio:** {precio_val}")
         
-        mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{row['descripcion']}* (Artículo: {row['articulo']}) por un valor de {precio_val} visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
+        mensaje = f"Hola {nombre_asesor}, me interesa adquirir el producto *{row['nombre']}* (Código: {row['codigo']}) por un valor de {precio_val} visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
         url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
         
         st.markdown(
