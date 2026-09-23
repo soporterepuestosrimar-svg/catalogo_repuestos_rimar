@@ -1,6 +1,18 @@
 import streamlit as st
 import pandas as pd
 import os
+import cloudinary
+import cloudinary.uploader
+
+# ==========================================
+# CONFIGURACIÓN DE CLOUDINARY (Tus datos de la nube)
+# ==========================================
+cloudinary.config(
+  cloud_name = "TU_CLOUD_NAME",
+  api_key = "TU_API_KEY",
+  api_secret = "TU_API_SECRET",
+  secure = True
+)
 
 # Configuración de la página
 st.set_page_config(
@@ -9,7 +21,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilos personalizados (Colores corporativos de Repuestos Rimar)
 st.markdown("""
     <style>
     .main {
@@ -26,20 +37,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Directorio para almacenar imágenes subidas
-UPLOAD_DIR = "uploaded_images"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# Archivo local de persistencia para los productos
 DATA_FILE = "inventario_rimar.csv"
 
-# Cargar inventario inicial o guardado
 @st.cache_data
 def cargar_datos():
     if os.path.exists(DATA_FILE):
         return pd.read_csv(DATA_FILE)
     else:
-        # Datos iniciales por defecto
         data = {
             "codigo": ["RIM-001", "RIM-002", "RIM-003", "RIM-004"],
             "nombre": [
@@ -65,7 +69,6 @@ if "df_productos" not in st.session_state:
 # --- ENCABEZADO Y LOGO ---
 col_logo, col_titulo = st.columns([1, 4])
 with col_logo:
-    # Puedes cambiar esta URL por el enlace directo de tu logo alojado en la web o Drive
     st.image("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200", width=120)
 with col_titulo:
     st.title("Repuestos Rimar - Catálogo Digital")
@@ -73,18 +76,16 @@ with col_titulo:
 
 st.divider()
 
-# --- BARRA LATERAL (FILTROS Y PANEL DE ADMINISTRACIÓN) ---
+# --- BARRA LATERAL ---
 st.sidebar.header("🔍 Filtros de Búsqueda")
 busqueda = st.sidebar.text_input("Buscar por código, repuesto o marca...")
 
-# Selector de Asesor para WhatsApp
 st.sidebar.header("💬 Contactar Asesor")
 asesor_elegido = st.sidebar.selectbox(
     "Elige con quién hablar:",
     ("Duban Pérez (+57 316 0181283)", "Maritza Moreno (+57 310 6804713)")
 )
 
-# Definir número según asesor
 if "Duban" in asesor_elegido:
     telefono_activo = "573160181283"
     nombre_asesor = "Duban Pérez"
@@ -94,48 +95,112 @@ else:
 
 st.sidebar.divider()
 
-# --- PANEL DE ADMINISTRACIÓN / GESTIÓN DE INVENTARIO ---
+# --- PANEL DE ADMINISTRACIÓN ---
 st.sidebar.header("⚙️ Panel de Administración")
-modo_admin = st.sidebar.checkbox("Activar modo administrador")
+password = st.sidebar.text_input("Contraseña de Administrador", type="password")
 
-if modo_admin:
-    st.sidebar.subheader("Subir Inventario Masivo")
-    archivo_csv = st.sidebar.file_uploader("Sube tu archivo CSV con columnas: codigo, nombre, categoria, precio, imagen", type=["csv"])
-    if archivo_csv is not None:
-        df_nuevo = pd.read_csv(archivo_csv)
-        st.session_state.df_productos = df_nuevo
-        df_nuevo.to_csv(DATA_FILE, index=False)
-        st.sidebar.success("¡Inventario actualizado con éxito!")
-        st.rerun()
+if password == "admin123":
+    st.sidebar.success("✅ Acceso concedido")
+    pestana_admin = st.sidebar.radio("Opciones de Admin", ["Añadir Producto", "Editar / Cambiar Foto", "Cargar Masivo (Excel/CSV)"])
+    
+    if pestana_admin == "Añadir Producto":
+        st.sidebar.subheader("Nuevo Artículo")
+        with st.sidebar.form("form_nuevo"):
+            n_codigo = st.text_input("Código único (ej: RIM-005)")
+            n_nombre = st.text_input("Nombre del repuesto")
+            n_cat = st.text_input("Categoría")
+            n_precio = st.number_input("Precio ($)", min_value=0, step=1000)
+            n_img_file = st.file_uploader("Subir foto desde dispositivo", type=["jpg", "png", "jpeg"])
+            
+            submit_add = st.form_submit_button("Guardar Producto")
+            
+            if submit_add and n_codigo and n_nombre:
+                img_url = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
+                if n_img_file is not None:
+                    upload_result = cloudinary.uploader.upload(n_img_file)
+                    img_url = upload_result.get("secure_url")
+                
+                nuevo_reg = pd.DataFrame([{
+                    "codigo": n_codigo,
+                    "nombre": n_nombre,
+                    "categoria": n_cat,
+                    "precio": n_precio,
+                    "imagen": img_url
+                }])
+                st.session_state.df_productos = pd.concat([st.session_state.df_productos, nuevo_reg], ignore_index=True)
+                st.session_state.df_productos.to_csv(DATA_FILE, index=False)
+                st.sidebar.success("¡Producto agregado correctamente!")
+                st.rerun()
 
-    st.sidebar.subheader("Agregar Producto Individual")
-    with st.sidebar.form("form_agregar"):
-        n_codigo = st.text_input("Código único (ej: RIM-005)")
-        n_nombre = st.text_input("Nombre del repuesto")
-        n_cat = st.text_input("Categoría")
-        n_precio = st.number_input("Precio ($)", min_value=0, step=1000)
-        n_img = st.text_input("URL de la imagen")
-        submit_btn = st.form_submit_button("Añadir producto")
+    elif pestana_admin == "Editar / Cambiar Foto":
+        st.sidebar.subheader("Modificar Artículo Existente")
+        df_actual = st.session_state.df_productos
         
-        if submit_btn and n_codigo and n_nombre:
-            nuevo_reg = pd.DataFrame([{
-                "codigo": n_codigo,
-                "nombre": n_nombre,
-                "categoria": n_cat,
-                "precio": n_precio,
-                "imagen": n_img if n_img else "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
-            }])
-            st.session_state.df_productos = pd.concat([st.session_state.df_productos, nuevo_reg], ignore_index=True)
-            st.session_state.df_productos.to_csv(DATA_FILE, index=False)
-            st.success("¡Producto agregado!")
-            st.rerun()
+        if not df_actual.empty:
+            codigo_a_editar = st.sidebar.selectbox("Selecciona el Código del Artículo", df_actual['codigo'].tolist())
+            prod_idx = df_actual[df_actual['codigo'] == codigo_a_editar].index[0]
+            prod_actual = df_actual.loc[prod_idx]
+            
+            with st.sidebar.form("form_editar"):
+                e_nombre = st.text_input("Nombre", value=str(prod_actual['nombre']))
+                e_cat = st.text_input("Categoría", value=str(prod_actual['categoria']))
+                e_precio = st.number_input("Precio ($)", value=int(prod_actual['precio']), step=1000)
+                e_img_file = st.file_uploader("Actualizar foto desde dispositivo (Opcional)", type=["jpg", "png", "jpeg"])
+                
+                submit_edit = st.form_submit_button("Actualizar Artículo")
+                
+                if submit_edit:
+                    img_url_final = prod_actual['imagen']
+                    if e_img_file is not None:
+                        upload_result = cloudinary.uploader.upload(e_img_file)
+                        img_url_final = upload_result.get("secure_url")
+                    
+                    st.session_state.df_productos.at[prod_idx, 'nombre'] = e_nombre
+                    st.session_state.df_productos.at[prod_idx, 'categoria'] = e_cat
+                    st.session_state.df_productos.at[prod_idx, 'precio'] = e_precio
+                    st.session_state.df_productos.at[prod_idx, 'imagen'] = img_url_final
+                    
+                    st.session_state.df_productos.to_csv(DATA_FILE, index=False)
+                    st.sidebar.success("¡Artículo actualizado con éxito!")
+                    st.rerun()
+            
+            if st.sidebar.button("🗑️ Eliminar este artículo"):
+                st.session_state.df_productos = df_actual.drop(prod_idx).reset_index(drop=True)
+                st.session_state.df_productos.to_csv(DATA_FILE, index=False)
+                st.sidebar.success("Artículo eliminado.")
+                st.rerun()
 
-    if st.sidebar.button("🔄 Restablecer valores originales"):
-        if os.path.exists(DATA_FILE):
-            os.remove(DATA_FILE)
-        st.rerun()
+    elif pestana_admin == "Cargar Masivo (Excel/CSV)":
+        st.sidebar.subheader("Subir Inventario Masivo")
+        st.sidebar.markdown("Tu archivo debe contener las columnas: `codigo`, `nombre`, `categoria`, `precio`, `imagen`")
+        archivo_subido = st.sidebar.file_uploader("Sube tu archivo CSV o Excel", type=["csv", "xlsx"])
+        
+        if archivo_subido is not None:
+            try:
+                if archivo_subido.name.endswith('.csv'):
+                    # Intenta leer con coma o con punto y coma de forma automática
+                    try:
+                        df_subido = pd.read_csv(archivo_subido, sep=',')
+                        if len(df_subido.columns) <= 1:
+                            archivo_subido.seek(0)
+                            df_subido = pd.read_csv(archivo_subido, sep=';')
+                    except:
+                        archivo_subido.seek(0)
+                        df_subido = pd.read_csv(archivo_subido, sep=';', encoding='latin-1')
+                else:
+                    df_subido = pd.read_excel(archivo_subido)
+                
+                st.session_state.df_productos = df_subido
+                df_subido.to_csv(DATA_FILE, index=False)
+                st.sidebar.success("¡Inventario cargado y actualizado con éxito!")
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Error al leer el archivo: Revisa que las columnas coincidan.")
 
-# --- FILTRADO DE PRODUCTOS ---
+elif password != "":
+    st.sidebar.error("❌ Contraseña incorrecta")
+
+# --- VISUALIZACIÓN ---
 df = st.session_state.df_productos
 if busqueda:
     df_filtrado = df[
@@ -149,11 +214,9 @@ else:
 if df_filtrado.empty:
     st.warning("No se encontraron repuestos con ese criterio de búsqueda.")
 
-# --- VISUALIZACIÓN EN CUADRÍCULA ---
 cols = st.columns(3)
 for i, row in df_filtrado.iterrows():
     with cols[i % 3]:
-        # Validar imagen
         img_url = row['imagen'] if pd.notna(row['imagen']) and str(row['imagen']).startswith("http") else "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
         st.image(img_url, use_container_width=True)
         
@@ -161,11 +224,9 @@ for i, row in df_filtrado.iterrows():
         st.subheader(row['nombre'])
         st.write(f"**Categoría:** {row['categoria']}")
         
-        # Formato de precio en pesos
         precio_val = f"${int(row['precio']):,}" if pd.notna(row['precio']) else "$0"
         st.write(f"**Precio:** {precio_val}")
         
-        # Enlace directo al WhatsApp del asesor seleccionado
         mensaje = f"Hola {nombre_asesor}, me interesa adquirir el producto *{row['nombre']}* (Código: {row['codigo']}) por un valor de {precio_val} visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
         url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
         
@@ -175,6 +236,5 @@ for i, row in df_filtrado.iterrows():
         )
         st.divider()
 
-# Pie de página
 st.markdown("---")
 st.markdown("© 2026 **Repuestos Rimar** - Todos los derechos reservados. Contacto General: **+57 350 8258778**")
