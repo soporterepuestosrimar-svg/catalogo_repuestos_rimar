@@ -288,8 +288,8 @@ if password == "admin123":
                 st.sidebar.error(f"Error: {e}")
 
     elif pestana_admin == "Subida Masiva de Fotos (ZIP a la Nube)":
-        st.sidebar.subheader("Subir Fotos a Cloudinary (ZIP)")
-        st.sidebar.markdown("Es mejor **comprimir tu carpeta de fotos en formato .zip** y subirla aquí. El sistema procesará cada foto y la subirá **permanentemente a la nube**.")
+        st.sidebar.subheader("Subir Fotos a Cloudinary (ZIP Automático)")
+        st.sidebar.markdown("Sube tu `.zip`. El sistema leerá el número de cada foto, la subirá a Cloudinary de forma permanente y actualizará el catálogo automáticamente.")
         archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP con fotos", type=["zip"])
         
         if archivo_zip is not None:
@@ -323,7 +323,7 @@ if password == "admin123":
                 if art_limpio in mapa_fotos:
                     foto_path = mapa_fotos[art_limpio]
                     try:
-                        # Subir permanentemente a Cloudinary
+                        # Subir permanentemente a Cloudinary y capturar URL segura
                         res = cloudinary.uploader.upload(foto_path)
                         secure_url = res.get("secure_url")
                         df_actual.loc[idx, 'IMAGEN'] = secure_url
@@ -335,7 +335,7 @@ if password == "admin123":
 
             st.session_state.df_productos = df_actual
             df_actual.to_csv(DATA_FILE, index=False)
-            st.sidebar.success(f"¡Se subieron y guardaron {actualizados} fotos permanentemente en la nube con éxito!")
+            st.sidebar.success(f"¡Se asociaron, subieron y guardaron {actualizados} fotos permanentemente en la nube!")
             st.rerun()
 
     elif pestana_admin == "Cambiar Logo de Empresa":
@@ -436,7 +436,7 @@ for i, row in df_filtrado.iterrows():
                 </div>
             """, unsafe_allow_html=True)
             
-            # Renderizado directo desde los enlaces permanentes seguros de Cloudinary
+            # Carga garantizada desde la URL permanente de Cloudinary
             st.image(img_url, use_container_width=True)
             
             mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
@@ -450,4 +450,4 @@ for i, row in df_filtrado.iterrows():
             st.divider()
 
 st.markdown("---")
-st.markdown("© 2026 **Repuestos Rimar** - Todos los derechos reservados. Contacto Al Detal: **+57 350 8258778**")
+st.markdown("© 2026 **Repuestos Rimar** - Todos los derechos reservados. Contacto General: **+57 350 8258778**")
