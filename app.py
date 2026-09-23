@@ -72,7 +72,7 @@ with col_logo:
     st.image("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200", width=120)
 with col_titulo:
     st.title("Repuestos Rimar - Catálogo Digital")
-    st.markdown("**Confianza que mueve tu motor** | Repuestos que rinden.")
+    st.markdown("**Somos La Mejor Parte** | Repuestos de Calidad.")
 
 st.divider()
 
