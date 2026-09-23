@@ -6,12 +6,17 @@ import cloudinary.uploader
 import zipfile
 import re
 import shutil
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
 # ==========================================
-# CONFIGURACIÓN DE CLOUDINARY (Tus datos oficiales)
+# CONFIGURACIÓN DE CLOUDINARY
 # ==========================================
 cloudinary.config(
-  cloud_name = "r9vobuds", 
+  cloud_name = "r9vobuds",
   api_key = "973711151787113",
   api_secret = "l38OxV1brV1BxfmQkSTKjQEMYYU",
   secure = True
@@ -24,6 +29,7 @@ st.set_page_config(
     layout="wide"
 )
 
+# Estilos CSS avanzados para alinear tarjetas
 st.markdown("""
     <style>
     .main {
@@ -45,6 +51,44 @@ st.markdown("""
         font-size: 0.85em;
         font-weight: bold;
         margin-left: 6px;
+    }
+    .product-card {
+        background-color: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        height: 100%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .product-img-container {
+        width: 100%;
+        height: 180px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background-color: #fff;
+        margin-bottom: 10px;
+        border-radius: 6px;
+    }
+    .product-img-container img {
+        max-height: 180px;
+        object-fit: contain;
+    }
+    .product-title {
+        font-size: 1.05rem;
+        font-weight: bold;
+        color: #0A1628;
+        height: 55px;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        margin-bottom: 10px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -79,7 +123,6 @@ def cargar_datos():
 if "df_productos" not in st.session_state:
     st.session_state.df_productos = cargar_datos()
 
-# --- FUNCIÓN PARA DETECTAR TIPO DE REPUESTO ---
 def clasificar_repuesto(descripcion):
     desc = str(descripcion).upper()
     if any(k in desc for k in ["TIJERA", "BRAZO AXIAL", "MUÑECO", "BUJE", "TERMINAL"]):
@@ -101,6 +144,57 @@ def clasificar_repuesto(descripcion):
     else:
         palabras = desc.split()
         return palabras[0] if palabras else "General"
+
+# --- GENERADOR DE PDF ---
+def generar_pdf(dataframe_filtrado, nombre_asesor, telefono_asesor):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    elementos = []
+    
+    styles = getSampleStyleSheet()
+    estilo_titulo = ParagraphStyle('TituloPDF', parent=styles['Heading1'], fontSize=20, textColor=colors.HexColor('#0A1628'), alignment=1)
+    estilo_sub = ParagraphStyle('SubTituloPDF', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#555555'), alignment=1)
+    estilo_celda = ParagraphStyle('CeldaPDF', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#333333'))
+    
+    elementos.append(Paragraph("REPUESTOS RIMAR - CATÁLOGO DIGITAL", estilo_titulo))
+    elementos.append(Paragraph("Confianza que mueve tu motor | Contacto Asesor: " + nombre_asesor + " (" + telefono_asesor + ")", estilo_sub))
+    elementos.append(Spacer(1, 15))
+    
+    # Armar datos para la tabla del PDF
+    datos_tabla = [["Artículo", "Descripción", "Marca", "Categoría", "Precio (+IVA)"]]
+    
+    for _, row in dataframe_filtrado.iterrows():
+        art = str(row.get('ARTICULO', ''))
+        desc = str(row.get('DESCRIPSION', ''))
+        marca = str(row.get('MARCA', ''))
+        cat = str(row.get('CATEGORIA', ''))
+        precio_val = f"${int(row.get('PRECIO', 0)):,}" if pd.notna(row.get('PRECIO', 0)) else "$0"
+        
+        datos_tabla.append([
+            Paragraph(art, estilo_celda),
+            Paragraph(desc, estilo_celda),
+            Paragraph(marca, estilo_celda),
+            Paragraph(cat, estilo_celda),
+            Paragraph(precio_val + " +IVA", estilo_celda)
+        ])
+        
+    tabla = Table(datos_tabla, colWidths=[65, 230, 80, 90, 75])
+    tabla.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0A1628')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 10),
+        ('BOTTOMPADDING', (0,0), (-1,0), 6),
+        ('BACKGROUND', (0,1), (-1,-1), colors.HexColor('#f9f9f9')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    
+    elementos.append(tabla)
+    doc.build(elementos)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # --- ENCABEZADO Y LOGO ---
 col_logo, col_titulo = st.columns([1, 4])
@@ -274,18 +368,27 @@ if filtro_categoria != "Todas":
 if filtro_marca != "Todas" and 'MARCA' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['MARCA'].astype(str) == filtro_marca]
 
+# --- BOTÓN DE DESCARGA PDF ---
+st.markdown("### 📥 Descargar Catálogo")
+pdf_bytes = generar_pdf(df_filtrado, nombre_asesor, telefono_activo)
+st.download_button(
+    label="📄 Descargar Catálogo Filtrado en PDF",
+    data=pdf_bytes,
+    file_name="catalogo_repuestos_rimar.pdf",
+    mime="application/pdf"
+)
+st.divider()
+
 if df_filtrado.empty:
     st.warning("No se encontraron repuestos con los filtros seleccionados.")
 
-# --- MOSTRAR PRODUCTOS EN CUADRÍCULA ---
+# --- MOSTRAR PRODUCTOS EN CUADRÍCULA ALINEADA ---
 cols = st.columns(3)
 for i, row in df_filtrado.iterrows():
     with cols[i % 3]:
-        # Identificador real del artículo en el DataFrame original
         original_idx = row.name
         art_val = row.get('ARTICULO', 'S/N')
         
-        # --- BOTÓN DE LÁPIZ PARA EDITAR (SOLO MODO ADMIN) ---
         if modo_admin:
             with st.expander(f"✏️ Editar Artículo: {art_val}"):
                 with st.form(f"form_edit_{original_idx}"):
@@ -314,29 +417,34 @@ for i, row in df_filtrado.iterrows():
         if pd.isna(img_url) or not str(img_url).startswith("http"):
             img_url = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
             
-        st.image(img_url, use_container_width=True)
-        
         marca_val = row.get('MARCA', 'GENERICA')
-        desc_val = row.get('DESCRIPSION', 'Sin descripción')
+        desc_val = str(row.get('DESCRIPSION', 'Sin descripción'))
         cat_val = row.get('CATEGORIA', 'General')
         precio_num = row.get('PRECIO', 0)
-        
-        st.caption(f"🆔 **Art:** {art_val} | 🏷️ **Marca:** {marca_val} | 📂 {cat_val}")
-        st.subheader(str(desc_val))
-        
         precio_val = f"${int(precio_num):,}" if pd.notna(precio_num) else "$0"
-        
-        # Mostrar Precio con la etiqueta +IVA en color amarillo
-        st.markdown(f"**Precio:** {precio_val} <span class='iva-badge'>+IVA</span>", unsafe_allow_html=True)
         
         mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
         url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
-        
-        st.markdown(
-            f'<a href="{url_whatsapp}" target="_blank" style="display:block;text-align:center;padding:10px 15px;background-color:#25D366;color:white;text-decoration:none;border-radius:5px;font-weight:bold;margin-top:10px;">💬 Pedir con {nombre_asesor.split()[0]}</a>',
-            unsafe_allow_html=True
-        )
-        st.divider()
+
+        st.markdown(f"""
+            <div class="product-card">
+                <div>
+                    <div class="product-img-container">
+                        <img src="{img_url}" alt="Repuesto">
+                    </div>
+                    <div style="font-size: 0.8em; color: #666; margin-bottom: 4px;">
+                        🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}
+                    </div>
+                    <div class="product-title">{desc_val}</div>
+                    <div style="font-size: 1.1rem; font-weight: bold; color: #0A1628; margin-bottom: 12px;">
+                        Precio: {precio_val} <span class="iva-badge">+IVA</span>
+                    </div>
+                </div>
+                <div>
+                    <a href="{url_whatsapp}" target="_blank" style="display:block;text-align:center;padding:10px 15px;background-color:#25D366;color:white;text-decoration:none;border-radius:5px;font-weight:bold;">💬 Pedir con {nombre_asesor.split()[0]}</a>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
 st.markdown("---")
 st.markdown("© 2026 **Repuestos Rimar** - Todos los derechos reservados. Contacto General: **+57 350 8258778**")
