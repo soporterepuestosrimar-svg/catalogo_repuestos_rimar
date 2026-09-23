@@ -37,6 +37,15 @@ st.markdown("""
         color: white;
         font-weight: bold;
     }
+    .iva-badge {
+        background-color: #FFC107;
+        color: #0A1628;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        font-weight: bold;
+        margin-left: 6px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -70,7 +79,7 @@ def cargar_datos():
 if "df_productos" not in st.session_state:
     st.session_state.df_productos = cargar_datos()
 
-# --- FUNCIÓN PARA DETECTAR TIPO DE REPUESTO AUTOMÁTICAMENTE ---
+# --- FUNCIÓN PARA DETECTAR TIPO DE REPUESTO ---
 def clasificar_repuesto(descripcion):
     desc = str(descripcion).upper()
     if any(k in desc for k in ["TIJERA", "BRAZO AXIAL", "MUÑECO", "BUJE", "TERMINAL"]):
@@ -145,8 +154,10 @@ st.sidebar.divider()
 # --- PANEL DE ADMINISTRACIÓN ---
 st.sidebar.header("⚙️ Panel de Administración")
 password = st.sidebar.text_input("Contraseña de Administrador", type="password")
+modo_admin = False
 
 if password == "admin123":
+    modo_admin = True
     st.sidebar.success("✅ Acceso concedido")
     pestana_admin = st.sidebar.radio("Opciones de Admin", [
         "Cargar Masivo (Excel/CSV)", 
@@ -154,11 +165,9 @@ if password == "admin123":
         "Cambiar Logo de Empresa"
     ])
     
-    # 1. CARGA MASIVA DE EXCEL/CSV
     if pestana_admin == "Cargar Masivo (Excel/CSV)":
         st.sidebar.subheader("Carga Masiva de Inventario")
-        st.sidebar.markdown("Sube tu archivo con columnas: **ARTICULO**, **DESCRIPSION**, **MARCA**, **PRECIO**")
-        archivo_subido = st.sidebar.file_uploader("Sube tu archivo", type=["csv", "xlsx"])
+        archivo_subido = st.sidebar.file_uploader("Sube tu archivo (Excel/CSV)", type=["csv", "xlsx"])
         
         if archivo_subido is not None:
             try:
@@ -186,21 +195,19 @@ if password == "admin123":
                         
                     st.session_state.df_productos = df_subido
                     df_subido.to_csv(DATA_FILE, index=False)
-                    st.sidebar.success("¡Inventario y descripciones cargadas con éxito!")
+                    st.sidebar.success("¡Inventario cargado con éxito!")
                     st.rerun()
                 else:
-                    st.sidebar.error("El archivo debe contener obligatoriamente las columnas: ARTICULO, DESCRIPSION, PRECIO")
+                    st.sidebar.error("El archivo debe contener: ARTICULO, DESCRIPSION, PRECIO")
             except Exception as e:
-                st.sidebar.error(f"Error al procesar el archivo: {e}")
+                st.sidebar.error(f"Error: {e}")
 
-    # 2. SUBIDA MASIVA DE FOTOS EN ZIP (CORREGIDO PARA EVITAR ISADISDIRECTORYERROR)
     elif pestana_admin == "Subida Masiva de Fotos (ZIP)":
         st.sidebar.subheader("Subir Fotos en Lote (ZIP)")
-        st.sidebar.markdown("Sube un archivo **.zip** con tus fotos nombradas con el número de artículo (ej: `10652.jpg`).")
-        archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP con fotos", type=["zip"])
+        st.sidebar.markdown("Sube un **.zip** con las fotos nombradas con el número de artículo (Ej: `10652.jpg`).")
+        archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP", type=["zip"])
         
         if archivo_zip is not None:
-            # Limpiar carpeta temporal de forma segura
             if os.path.exists(TEMP_IMAGE_DIR):
                 shutil.rmtree(TEMP_IMAGE_DIR)
             os.makedirs(TEMP_IMAGE_DIR, exist_ok=True)
@@ -240,7 +247,6 @@ if password == "admin123":
             st.sidebar.success(f"¡Se asociaron y subieron {actualizados} fotos a la nube con éxito!")
             st.rerun()
 
-    # 3. CAMBIAR LOGO
     elif pestana_admin == "Cambiar Logo de Empresa":
         st.sidebar.subheader("Actualizar Logo")
         logo_subido = st.sidebar.file_uploader("Sube la imagen de tu logo", type=["png", "jpg", "jpeg"])
@@ -275,13 +281,41 @@ if df_filtrado.empty:
 cols = st.columns(3)
 for i, row in df_filtrado.iterrows():
     with cols[i % 3]:
+        # Identificador real del artículo en el DataFrame original
+        original_idx = row.name
+        art_val = row.get('ARTICULO', 'S/N')
+        
+        # --- BOTÓN DE LÁPIZ PARA EDITAR (SOLO MODO ADMIN) ---
+        if modo_admin:
+            with st.expander(f"✏️ Editar Artículo: {art_val}"):
+                with st.form(f"form_edit_{original_idx}"):
+                    nuevo_desc = st.text_input("Descripción", value=str(row.get('DESCRIPSION', '')))
+                    nueva_marca = st.text_input("Marca", value=str(row.get('MARCA', '')))
+                    nuevo_precio = st.number_input("Precio ($)", value=int(row.get('PRECIO', 0)), step=1000)
+                    nueva_foto = st.file_uploader("Cambiar Foto (Opcional)", type=["jpg", "png", "jpeg"], key=f"img_{original_idx}")
+                    
+                    guardar_btn = st.form_submit_button("Guardar Cambios")
+                    if guardar_btn:
+                        df.loc[original_idx, 'DESCRIPSION'] = nuevo_desc
+                        df.loc[original_idx, 'MARCA'] = nueva_marca
+                        df.loc[original_idx, 'PRECIO'] = nuevo_precio
+                        df.loc[original_idx, 'CATEGORIA'] = clasificar_repuesto(nuevo_desc)
+                        
+                        if nueva_foto is not None:
+                            res_up = cloudinary.uploader.upload(nueva_foto)
+                            df.loc[original_idx, 'IMAGEN'] = res_up.get("secure_url")
+                            
+                        st.session_state.df_productos = df
+                        df.to_csv(DATA_FILE, index=False)
+                        st.success("¡Actualizado con éxito!")
+                        st.rerun()
+
         img_url = row.get('IMAGEN', "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400")
         if pd.isna(img_url) or not str(img_url).startswith("http"):
             img_url = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
             
         st.image(img_url, use_container_width=True)
         
-        art_val = row.get('ARTICULO', 'S/N')
         marca_val = row.get('MARCA', 'GENERICA')
         desc_val = row.get('DESCRIPSION', 'Sin descripción')
         cat_val = row.get('CATEGORIA', 'General')
@@ -291,9 +325,11 @@ for i, row in df_filtrado.iterrows():
         st.subheader(str(desc_val))
         
         precio_val = f"${int(precio_num):,}" if pd.notna(precio_num) else "$0"
-        st.write(f"**Precio:** {precio_val}")
         
-        mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
+        # Mostrar Precio con la etiqueta +IVA en color amarillo
+        st.markdown(f"**Precio:** {precio_val} <span class='iva-badge'>+IVA</span>", unsafe_allow_html=True)
+        
+        mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
         url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
         
         st.markdown(
