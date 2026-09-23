@@ -3,3 +3,4 @@ pandas
 cloudinary
 openpyxl
 reportlab
+streamlit-image-zoom
