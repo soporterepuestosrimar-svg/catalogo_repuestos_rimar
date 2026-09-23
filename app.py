@@ -29,7 +29,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilos CSS avanzados para alinear tarjetas de manera prolija y simétrica
+# Estilos CSS avanzados (Alineación perfecta y tarjetas idénticas)
 st.markdown("""
     <style>
     .main {
@@ -44,6 +44,10 @@ st.markdown("""
         font-weight: bold;
         width: 100%;
         border-radius: 6px;
+    }
+    .btn-volver>button {
+        background-color: #6c757d !important;
+        color: white !important;
     }
     .iva-badge {
         background-color: #FFC107;
@@ -67,15 +71,31 @@ st.markdown("""
         height: 100%;
     }
     .product-title {
-        font-size: 1rem;
+        font-size: 0.95rem;
         font-weight: bold;
         color: #0A1628;
-        height: 48px;
+        height: 44px;
         overflow: hidden;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
+    }
+    .img-container {
+        width: 100%;
+        height: 200px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+        margin-bottom: 15px;
+        border-radius: 8px;
+        background-color: #ffffff;
+    }
+    .img-container img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -106,7 +126,6 @@ def cargar_datos():
         }
         return pd.DataFrame(data)
 
-# Cargar base de datos persistente
 df = cargar_datos()
 
 def clasificar_repuesto(descripcion):
@@ -195,7 +214,6 @@ with col_titulo:
 
 st.divider()
 
-# --- PREPARAR DATOS Y FILTROS ---
 if 'CATEGORIA' not in df.columns:
     df['CATEGORIA'] = df['DESCRIPSION'].apply(clasificar_repuesto)
 
@@ -246,7 +264,6 @@ modo_admin = st.session_state.admin_logged
 if modo_admin:
     st.sidebar.success("✅ Acceso concedido como Administrador")
     
-    # --- BOTÓN PARA SALIR DEL PANEL ADMIN ---
     if st.sidebar.button("🔒 Cerrar Sesión Admin"):
         st.session_state.admin_logged = False
         st.rerun()
@@ -363,7 +380,78 @@ if filtro_categoria != "Todas":
 if filtro_marca != "Todas" and 'MARCA' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['MARCA'].astype(str) == filtro_marca]
 
-# --- BOTÓN DE DESCARGA PDF ---
+# =======================================================
+# LÓGICA DE VISTA AMPLIADA (MODAL) Y SUMADOR DE CANTIDADES
+# =======================================================
+if "detalle_articulo" not in st.session_state:
+    st.session_state.detalle_articulo = None
+
+if st.session_state.detalle_articulo is not None:
+    art_sel = st.session_state.detalle_articulo
+    fila_match = df[df['ARTICULO'].astype(str) == str(art_sel)]
+    
+    if not fila_match.empty:
+        prod = fila_match.iloc[0]
+        
+        # Botón superior con "X" para cerrar y volver
+        st.markdown('<div class="btn-volver">', unsafe_allow_html=True)
+        if st.button("❌ CERRAR VISTA Y VOLVER AL CATÁLOGO"):
+            st.session_state.detalle_articulo = None
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+                
+        st.markdown("---")
+        
+        c1, c2 = st.columns([1, 1], gap="large")
+        with c1:
+            img_detalle = prod.get('IMAGEN', "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400")
+            if pd.isna(img_detalle) or not str(img_detalle).startswith("http"):
+                img_detalle = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
+            
+            st.markdown(f"""
+                <div class="img-container" style="height: 400px; border: 1px solid #ddd;">
+                    <img src="{img_detalle}">
+                </div>
+            """, unsafe_allow_html=True)
+            
+        with c2:
+            st.markdown(f"## 🆔 Artículo: {prod.get('ARTICULO')}")
+            st.markdown(f"### 🏷️ Marca: {prod.get('MARCA', 'GENERICA')}")
+            st.markdown(f"### 📂 Categoría: {prod.get('CATEGORIA', 'General')}")
+            st.markdown(f"**Descripción detallada:**\n\n {prod.get('DESCRIPSION')}")
+            
+            precio_unit = prod.get('PRECIO', 0)
+            precio_fmt = f"${int(precio_unit):,}" if pd.notna(precio_unit) else "$0"
+            st.markdown(f"### Precio Unitario: {precio_fmt} <span class='iva-badge'>+IVA</span>", unsafe_allow_html=True)
+            
+            st.markdown("---")
+            st.markdown("#### 🔢 Selecciona la cantidad (Usa los botones + y -):")
+            
+            # Sumador de cantidades nativo de Streamlit
+            cantidad = st.number_input("Cantidad", min_value=1, value=1, step=1, label_visibility="collapsed")
+            
+            precio_total = int(precio_unit) * cantidad if pd.notna(precio_unit) else 0
+            precio_total_fmt = f"${precio_total:,}"
+            
+            st.markdown(f"**Total a Pagar ({cantidad} unidad/es):** `{precio_total_fmt} +IVA`")
+            
+            desc_text = str(prod.get('DESCRIPSION'))
+            art_code = str(prod.get('ARTICULO'))
+            mensaje = f"Hola {nombre_asesor}, me interesa adquirir {cantidad} unidad(es) del repuesto *{desc_text}* (Artículo: {art_code}) por un valor total de {precio_total_fmt} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
+            url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
+
+            st.markdown(f"""
+                <div style="margin-top: 15px;">
+                    <a href="{url_whatsapp}" target="_blank" style="display:block;text-align:center;padding:12px 20px;background-color:#25D366;color:white;text-decoration:none;border-radius:6px;font-weight:bold;font-size:1.1rem;">💬 Pedir {cantidad} unidad(es) por WhatsApp</a>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        st.stop() # Esto detiene la página para que solo se vea la ventana de detalles
+
+# =======================================================
+# MOSTRAR CATÁLOGO NORMAL (SI NO HAY ARTÍCULO SELECCIONADO)
+# =======================================================
+
 st.markdown("### 📥 Descargar Catálogo")
 pdf_bytes = generar_pdf(df_filtrado, nombre_asesor, telefono_activo)
 st.download_button(
@@ -377,7 +465,7 @@ st.divider()
 if df_filtrado.empty:
     st.warning("No se encontraron repuestos con los filtros seleccionados.")
 
-# --- MOSTRAR PRODUCTOS EN CUADRÍCULA ORDENADA (3 COLUMNAS) ---
+# --- CUADRÍCULA ORDENADA Y ALINEADA ---
 lista_productos = df_filtrado.to_dict('records')
 num_cols = 3
 filas = [lista_productos[i:i + num_cols] for i in range(0, len(lista_productos), num_cols)]
@@ -424,31 +512,30 @@ for fila in filas:
             precio_num = row.get('PRECIO', 0)
             precio_val = f"${int(precio_num):,}" if pd.notna(precio_num) else "$0"
             
-            # --- TARJETA VISUAL ALINEADA Y PROLIJA ---
-            st.markdown(f"""
-                <div class="product-card">
-                    <div>
-                        <div style="font-size: 0.75em; color: #666; margin-bottom: 4px;">
-                            🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}
-                        </div>
-                        <div class="product-title">{desc_val}</div>
-                        <div style="font-size: 1.05rem; font-weight: bold; color: #0A1628; margin-bottom: 10px;">
-                            Precio: {precio_val} <span class="iva-badge">+IVA</span>
+            # --- TARJETA CON CONTENEDOR DE IMAGEN EXACTO ---
+            with st.container():
+                st.markdown(f"""
+                    <div class="product-card">
+                        <div>
+                            <div style="font-size: 0.75em; color: #666; margin-bottom: 4px;">
+                                🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}
+                            </div>
+                            <div class="product-title">{desc_val}</div>
+                            
+                            <div class="img-container">
+                                <img src="{img_url}">
+                            </div>
+                            
+                            <div style="font-size: 1.05rem; font-weight: bold; color: #0A1628; margin-bottom: 10px; text-align: center;">
+                                {precio_val} <span class="iva-badge">+IVA</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            st.image(img_url, use_container_width=True)
-            
-            mensaje = f"Hola {nombre_asesor}, me interesa adquirir el repuesto *{desc_val}* (Artículo: {art_val}) por un valor de {precio_val} + IVA visto en Repuestos Rimar. ¿Me confirman disponibilidad?"
-            url_whatsapp = f"https://wa.me/{telefono_activo}?text={mensaje.replace(' ', '%20')}"
-
-            st.markdown(f"""
-                <div style="margin-top: 10px; margin-bottom: 20px;">
-                    <a href="{url_whatsapp}" target="_blank" style="display:block;text-align:center;padding:10px 15px;background-color:#25D366;color:white;text-decoration:none;border-radius:6px;font-weight:bold;">💬 Pedir con {nombre_asesor.split()[0]}</a>
-                </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+                
+                if st.button("🔍 Ver Detalle y Comprar", key=f"btn_det_{art_val}"):
+                    st.session_state.detalle_articulo = art_val
+                    st.rerun()
 
 st.markdown("---")
 st.markdown("© 2026 **Repuestos Rimar** - Todos los derechos reservados. Contacto General: **+57 350 8258778**")
