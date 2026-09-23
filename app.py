@@ -8,9 +8,9 @@ import cloudinary.uploader
 # CONFIGURACIÓN DE CLOUDINARY (Tus datos de la nube)
 # ==========================================
 cloudinary.config(
-  cloud_name = "TU_CLOUD_NAME",
-  api_key = "TU_API_KEY",
-  api_secret = "TU_API_SECRET",
+  cloud_name = "r9vobuds",
+  api_key = "973711151787113",
+  api_secret = "l38OxV1brV1BxfmQkSTKjQEMYYU",
   secure = True
 )
 
