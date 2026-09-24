@@ -238,9 +238,36 @@ if modo_admin:
                         archivo_subido.seek(0)
                         df_subido = pd.read_csv(archivo_subido, sep=';', encoding='latin-1')
                 else:
-                    df_subido = pd.read_excel(archivo_subido)
+                    xls = pd.ExcelFile(archivo_subido)
+                    
+                    # LOGICA INTELIGENTE: Si detecta la hoja de "listado general productos mayor", la usa.
+                    if 'Consolidado Precios Repuestos' in xls.sheet_names:
+                        df_subido = pd.read_excel(xls, sheet_name='Consolidado Precios Repuestos', header=1)
+                    else:
+                        df_subido = pd.read_excel(xls)
+                        # Busca el encabezado si el excel trae celdas vacías arriba (Ej: Unnamed)
+                        if any('Unnamed' in str(c) for c in df_subido.columns):
+                            for i in range(min(10, len(df_subido))):
+                                fila_vals = [str(v).upper() for v in df_subido.iloc[i].values]
+                                if any(k in v for v in fila_vals for k in ['CÓDIGO', 'CODIGO', 'ARTICULO', 'DESCRIPCIÓN']):
+                                    df_subido.columns = df_subido.iloc[i]
+                                    df_subido = df_subido.iloc[i+1:].reset_index(drop=True)
+                                    break
                 
-                df_subido.columns = [c.strip().upper() for c in df_subido.columns]
+                # Normalizar nombres para no depender de mayúsculas o espacios
+                df_subido.columns = [str(c).strip().upper() for c in df_subido.columns]
+                
+                # TRADUCTOR DE COLUMNAS (Adapta tu Excel al formato de la web automáticamente)
+                renames = {
+                    'CÓDIGO': 'ARTICULO',
+                    'CODIGO': 'ARTICULO',
+                    'DESCRIPCIÓN': 'DESCRIPSION',
+                    'DESCRIPCION': 'DESCRIPSION',
+                    'PRECIO UNITARIO': 'PRECIO',
+                    'MARCA PRODUCTO': 'MARCA',
+                    'SUBGRUPO': 'CATEGORIA'
+                }
+                df_subido = df_subido.rename(columns=renames)
                 
                 if 'ARTICULO' in df_subido.columns and 'DESCRIPSION' in df_subido.columns and 'PRECIO' in df_subido.columns:
                     if 'IMAGEN' not in df_subido.columns:
@@ -248,7 +275,11 @@ if modo_admin:
                     if 'MARCA' not in df_subido.columns:
                         df_subido['MARCA'] = "GENERICA"
                     
-                    df_subido['CATEGORIA'] = df_subido['DESCRIPSION'].apply(clasificar_repuesto)
+                    if 'CATEGORIA' not in df_subido.columns:
+                        df_subido['CATEGORIA'] = df_subido['DESCRIPSION'].apply(clasificar_repuesto)
+                    else:
+                        # Si tu Excel ya traía el subgrupo/categoría, lo formateamos bonito.
+                        df_subido['CATEGORIA'] = df_subido['CATEGORIA'].fillna('General').astype(str).str.title()
                     
                     df_subido['ARTICULO'] = df_subido['ARTICULO'].astype(str)
                     df['ARTICULO'] = df['ARTICULO'].astype(str)
@@ -259,9 +290,10 @@ if modo_admin:
                     st.sidebar.success("¡Artículos guardados! Descarga tu CSV de respaldo abajo.")
                     st.rerun()
                 else:
-                    st.sidebar.error("El archivo debe contener: ARTICULO, DESCRIPSION, PRECIO")
+                    faltantes = [c for c in ['ARTICULO', 'DESCRIPSION', 'PRECIO'] if c not in df_subido.columns]
+                    st.sidebar.error(f"Error: El sistema no pudo encontrar las columnas clave tras la conversión. Faltan: {faltantes}")
             except Exception as e:
-                st.sidebar.error(f"Error: {e}")
+                st.sidebar.error(f"Error al procesar el archivo: {e}")
 
     elif pestana_admin == "Subida Masiva de Fotos (ZIP Permanente)":
         st.sidebar.subheader("Subida Masiva a la Nube")
@@ -378,7 +410,13 @@ if st.session_state.detalle_articulo is not None:
             st.markdown(f"**Descripción detallada:**\n\n {prod.get('DESCRIPSION')}")
             
             precio_unit = prod.get('PRECIO', 0)
-            precio_fmt = f"${int(precio_unit):,}" if pd.notna(precio_unit) else "$0"
+            
+            try:
+                precio_num_val = int(pd.to_numeric(precio_unit, errors='coerce'))
+            except:
+                precio_num_val = 0
+                
+            precio_fmt = f"${precio_num_val:,}"
             st.markdown(f"### Precio Unitario: {precio_fmt} <span class='iva-badge'>+IVA</span>", unsafe_allow_html=True)
             
             st.markdown("---")
@@ -386,7 +424,7 @@ if st.session_state.detalle_articulo is not None:
             
             cantidad = st.number_input("Cantidad", min_value=1, value=1, step=1, label_visibility="collapsed")
             
-            precio_total = int(precio_unit) * cantidad if pd.notna(precio_unit) else 0
+            precio_total = precio_num_val * cantidad
             precio_total_fmt = f"${precio_total:,}"
             
             st.markdown(f"**Subtotal ({cantidad} unidad/es):** `{precio_total_fmt} +IVA`")
@@ -401,7 +439,7 @@ if st.session_state.detalle_articulo is not None:
                     'articulo': art_code,
                     'descripcion': desc_text,
                     'cantidad': cantidad,
-                    'precio_unitario': int(precio_unit) if pd.notna(precio_unit) else 0,
+                    'precio_unitario': precio_num_val,
                     'precio_total': precio_total
                 })
                 st.session_state.detalle_articulo = None
@@ -479,7 +517,7 @@ for fila in filas:
                     with st.form(f"form_edit_{art_val}"):
                         nuevo_desc = st.text_input("Descripción", value=str(row.get('DESCRIPSION', '')))
                         nueva_marca = st.text_input("Marca", value=str(row.get('MARCA', '')))
-                        nuevo_precio = st.number_input("Precio ($)", value=int(row.get('PRECIO', 0)), step=1000)
+                        nuevo_precio = st.number_input("Precio ($)", value=int(pd.to_numeric(row.get('PRECIO', 0), errors='coerce')) if pd.notna(row.get('PRECIO')) else 0, step=1000)
                         nueva_foto = st.file_uploader("Cambiar Foto", type=["jpg", "png", "jpeg"], key=f"img_{art_val}")
                         
                         guardar_btn = st.form_submit_button("Guardar Cambios")
@@ -507,8 +545,14 @@ for fila in filas:
             marca_val = row.get('MARCA', 'GENERICA')
             desc_val = str(row.get('DESCRIPSION', 'Sin descripción'))
             cat_val = row.get('CATEGORIA', 'General')
-            precio_num = row.get('PRECIO', 0)
-            precio_val = f"${int(precio_num):,}" if pd.notna(precio_num) else "$0"
+            
+            precio_val_raw = row.get('PRECIO', 0)
+            try:
+                precio_num_val = int(pd.to_numeric(precio_val_raw, errors='coerce'))
+            except:
+                precio_num_val = 0
+            
+            precio_val = f"${precio_num_val:,}"
             
             html_tarjeta_catalogo = f"""<div class="product-card"><div style="font-size: 0.75em; color: #666; margin-bottom: 4px;">🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}</div><div class="product-title">{desc_val}</div><div style="height: 200px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-bottom: 15px; border-radius: 8px; background-color: #ffffff;"><img src="{img_url}" style="max-width: 100%; max-height: 100%; object-fit: contain;"></div><div style="font-size: 1.05rem; font-weight: bold; color: #0A1628; margin-bottom: 10px; text-align: center;">{precio_val} <span class="iva-badge">+IVA</span></div></div>"""
             
