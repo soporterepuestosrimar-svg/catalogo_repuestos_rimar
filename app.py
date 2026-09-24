@@ -58,6 +58,7 @@ def cargar_datos():
         df.columns = [c.strip().upper() for c in df.columns]
         return df
     else:
+        # Datos de prueba (aparecen cuando Streamlit borra el CSV local por reinicio)
         data = {
             "ARTICULO": [10652, 10656],
             "DESCRIPSION": [
@@ -255,7 +256,7 @@ if modo_admin:
                     df_combinado = pd.concat([df, df_subido]).drop_duplicates(subset=['ARTICULO'], keep='last').reset_index(drop=True)
                         
                     df_combinado.to_csv(DATA_FILE, index=False)
-                    st.sidebar.success("¡Artículos guardados en la base de datos!")
+                    st.sidebar.success("¡Artículos guardados! Descarga tu CSV de respaldo abajo.")
                     st.rerun()
                 else:
                     st.sidebar.error("El archivo debe contener: ARTICULO, DESCRIPSION, PRECIO")
@@ -264,7 +265,6 @@ if modo_admin:
 
     elif pestana_admin == "Subida Masiva de Fotos (ZIP Permanente)":
         st.sidebar.subheader("Subida Masiva a la Nube")
-        st.sidebar.markdown("Sube tu `.zip`. Las fotos se subirán a Cloudinary y se guardarán permanentemente.")
         archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP", type=["zip"])
         
         if archivo_zip is not None:
@@ -300,7 +300,7 @@ if modo_admin:
                         pass
 
             df.to_csv(DATA_FILE, index=False)
-            st.sidebar.success(f"¡{actualizados} fotos subidas y guardadas en la nube!")
+            st.sidebar.success(f"¡{actualizados} fotos subidas! Descarga tu CSV de respaldo abajo.")
             st.rerun()
 
     elif pestana_admin == "Cambiar Logo de Empresa":
@@ -311,6 +311,19 @@ if modo_admin:
                 f.write(logo_subido.getbuffer())
             st.sidebar.success("¡Logo actualizado con éxito!")
             st.rerun()
+            
+    # --- BOTÓN CLAVE DE RESPALDO PARA GITHUB ---
+    st.sidebar.divider()
+    st.sidebar.markdown("### 💾 Respaldo Obligatorio")
+    st.sidebar.markdown("<small>Streamlit borra los cambios al reiniciarse. **Descarga tu base de datos aquí y súbela a GitHub** reemplazando el viejo archivo para que los cambios sean permanentes.</small>", unsafe_allow_html=True)
+    
+    csv_data = df.to_csv(index=False).encode('utf-8')
+    st.sidebar.download_button(
+        label="⬇️ Descargar inventario_rimar.csv",
+        data=csv_data,
+        file_name=DATA_FILE,
+        mime='text/csv'
+    )
 
 # --- APLICAR FILTROS EN PANTALLA ---
 df_filtrado = df.copy()
@@ -341,7 +354,6 @@ if st.session_state.detalle_articulo is not None:
     if not fila_match.empty:
         prod = fila_match.iloc[0]
         
-        # Botón superior con "X" para cerrar y volver
         st.markdown('<div class="btn-volver">', unsafe_allow_html=True)
         if st.button("❌ CERRAR VISTA Y VOLVER AL CATÁLOGO"):
             st.session_state.detalle_articulo = None
@@ -356,7 +368,6 @@ if st.session_state.detalle_articulo is not None:
             if pd.isna(img_detalle) or not str(img_detalle).startswith("http"):
                 img_detalle = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
             
-            # HTML COMPACTADO PARA EVITAR CONFLICTOS DE MARKDOWN
             html_img_detalle = f"""<div style="height: 400px; border: 1px solid #ddd; border-radius: 8px; display: flex; justify-content: center; align-items: center; background-color: #fff; overflow: hidden;"><img src="{img_detalle}" style="max-width: 100%; max-height: 100%; object-fit: contain;"></div>"""
             st.markdown(html_img_detalle, unsafe_allow_html=True)
             
@@ -486,7 +497,7 @@ for fila in filas:
                                     df.loc[i_real, 'IMAGEN'] = res_up.get("secure_url")
                                     
                                 df.to_csv(DATA_FILE, index=False)
-                                st.success("¡Actualizado en la nube!")
+                                st.success("¡Actualizado! Recuerda descargar tu respaldo.")
                                 st.rerun()
 
             img_url = row.get('IMAGEN', "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400")
@@ -499,7 +510,6 @@ for fila in filas:
             precio_num = row.get('PRECIO', 0)
             precio_val = f"${int(precio_num):,}" if pd.notna(precio_num) else "$0"
             
-            # --- TARJETA COMPACTA HTML PARA EVITAR ERRORES DE MARKDOWN ---
             html_tarjeta_catalogo = f"""<div class="product-card"><div style="font-size: 0.75em; color: #666; margin-bottom: 4px;">🆔 <b>Art:</b> {art_val} | 🏷️ <b>Marca:</b> {marca_val} | 📂 {cat_val}</div><div class="product-title">{desc_val}</div><div style="height: 200px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-bottom: 15px; border-radius: 8px; background-color: #ffffff;"><img src="{img_url}" style="max-width: 100%; max-height: 100%; object-fit: contain;"></div><div style="font-size: 1.05rem; font-weight: bold; color: #0A1628; margin-bottom: 10px; text-align: center;">{precio_val} <span class="iva-badge">+IVA</span></div></div>"""
             
             st.markdown(html_tarjeta_catalogo, unsafe_allow_html=True)
