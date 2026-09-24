@@ -7,6 +7,7 @@ import shutil
 import cloudinary
 import cloudinary.uploader
 import urllib.parse
+import concurrent.futures  # <--- NUEVO: Para subida ultrarrápida en paralelo
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -58,7 +59,6 @@ def cargar_datos():
         df.columns = [c.strip().upper() for c in df.columns]
         return df
     else:
-        # Datos de prueba (aparecen cuando Streamlit borra el CSV local por reinicio)
         data = {
             "ARTICULO": [10652, 10656],
             "DESCRIPSION": [
@@ -239,13 +239,10 @@ if modo_admin:
                         df_subido = pd.read_csv(archivo_subido, sep=';', encoding='latin-1')
                 else:
                     xls = pd.ExcelFile(archivo_subido)
-                    
-                    # LOGICA INTELIGENTE: Si detecta la hoja de "listado general productos mayor", la usa.
                     if 'Consolidado Precios Repuestos' in xls.sheet_names:
                         df_subido = pd.read_excel(xls, sheet_name='Consolidado Precios Repuestos', header=1)
                     else:
                         df_subido = pd.read_excel(xls)
-                        # Busca el encabezado si el excel trae celdas vacías arriba (Ej: Unnamed)
                         if any('Unnamed' in str(c) for c in df_subido.columns):
                             for i in range(min(10, len(df_subido))):
                                 fila_vals = [str(v).upper() for v in df_subido.iloc[i].values]
@@ -254,17 +251,12 @@ if modo_admin:
                                     df_subido = df_subido.iloc[i+1:].reset_index(drop=True)
                                     break
                 
-                # Normalizar nombres para no depender de mayúsculas o espacios
                 df_subido.columns = [str(c).strip().upper() for c in df_subido.columns]
                 
-                # TRADUCTOR DE COLUMNAS (Adapta tu Excel al formato de la web automáticamente)
                 renames = {
-                    'CÓDIGO': 'ARTICULO',
-                    'CODIGO': 'ARTICULO',
-                    'DESCRIPCIÓN': 'DESCRIPSION',
-                    'DESCRIPCION': 'DESCRIPSION',
-                    'PRECIO UNITARIO': 'PRECIO',
-                    'MARCA PRODUCTO': 'MARCA',
+                    'CÓDIGO': 'ARTICULO', 'CODIGO': 'ARTICULO',
+                    'DESCRIPCIÓN': 'DESCRIPSION', 'DESCRIPCION': 'DESCRIPSION',
+                    'PRECIO UNITARIO': 'PRECIO', 'MARCA PRODUCTO': 'MARCA',
                     'SUBGRUPO': 'CATEGORIA'
                 }
                 df_subido = df_subido.rename(columns=renames)
@@ -278,7 +270,6 @@ if modo_admin:
                     if 'CATEGORIA' not in df_subido.columns:
                         df_subido['CATEGORIA'] = df_subido['DESCRIPSION'].apply(clasificar_repuesto)
                     else:
-                        # Si tu Excel ya traía el subgrupo/categoría, lo formateamos bonito.
                         df_subido['CATEGORIA'] = df_subido['CATEGORIA'].fillna('General').astype(str).str.title()
                     
                     df_subido['ARTICULO'] = df_subido['ARTICULO'].astype(str)
@@ -290,14 +281,13 @@ if modo_admin:
                     st.sidebar.success("¡Artículos guardados! Descarga tu CSV de respaldo abajo.")
                     st.rerun()
                 else:
-                    faltantes = [c for c in ['ARTICULO', 'DESCRIPSION', 'PRECIO'] if c not in df_subido.columns]
-                    st.sidebar.error(f"Error: El sistema no pudo encontrar las columnas clave tras la conversión. Faltan: {faltantes}")
+                    st.sidebar.error("Error: El sistema no pudo encontrar las columnas clave.")
             except Exception as e:
                 st.sidebar.error(f"Error al procesar el archivo: {e}")
 
     elif pestana_admin == "Subida Masiva de Fotos (ZIP Permanente)":
-        st.sidebar.subheader("Subida Masiva a la Nube")
-        archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP", type=["zip"])
+        st.sidebar.subheader("Subida Masiva a la Nube (Rápida)")
+        archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP (Recomendado: 300-500 fotos por vez)", type=["zip"])
         
         if archivo_zip is not None:
             if os.path.exists(TEMP_ZIP_DIR):
@@ -316,24 +306,55 @@ if modo_admin:
                         if limpio:
                             mapa_fotos[limpio] = os.path.join(root, file)
 
-            actualizados = 0
+            # Buscar qué filas del Excel tienen foto en el ZIP
+            tareas_upload = []
             for idx, row in df.iterrows():
                 art_num = str(row['ARTICULO']).strip()
                 art_limpio = re.sub(r'\D', '', art_num)
-                
                 if art_limpio in mapa_fotos:
-                    foto_path = mapa_fotos[art_limpio]
+                    tareas_upload.append((idx, mapa_fotos[art_limpio]))
+
+            if not tareas_upload:
+                st.sidebar.warning("No se encontraron fotos en el ZIP que coincidan con los artículos del Excel.")
+            else:
+                st.sidebar.info(f"Procesando {len(tareas_upload)} fotos encontradas. Por favor, no cierres la ventana...")
+                
+                # BARRA DE PROGRESO
+                barra_progreso = st.sidebar.progress(0)
+                texto_progreso = st.sidebar.empty()
+                
+                actualizados = 0
+                total = len(tareas_upload)
+
+                # Función para subir a Cloudinary en hilos
+                def subir_a_cloudinary(tarea):
+                    i_df, foto_path = tarea
                     try:
                         res = cloudinary.uploader.upload(foto_path, folder="catalogo_rimar")
-                        secure_url = res.get("secure_url")
-                        df.loc[idx, 'IMAGEN'] = secure_url
-                        actualizados += 1
-                    except Exception as ex:
-                        pass
+                        return i_df, res.get("secure_url")
+                    except Exception:
+                        return i_df, None
 
-            df.to_csv(DATA_FILE, index=False)
-            st.sidebar.success(f"¡{actualizados} fotos subidas! Descarga tu CSV de respaldo abajo.")
-            st.rerun()
+                # SUBIDA EN PARALELO (Hasta 10 a la vez = Mucho más rápido)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                    futuros = {executor.submit(subir_a_cloudinary, t): t for t in tareas_upload}
+                    
+                    for i, futuro in enumerate(concurrent.futures.as_completed(futuros)):
+                        idx_df, url = futuro.result()
+                        if url:
+                            df.loc[idx_df, 'IMAGEN'] = url
+                            actualizados += 1
+                        
+                        # Actualizar barra visual
+                        progreso_actual = (i + 1) / total
+                        barra_progreso.progress(progreso_actual)
+                        texto_progreso.text(f"Subiendo fotos: {i + 1} de {total} completadas...")
+
+                df.to_csv(DATA_FILE, index=False)
+                st.sidebar.success(f"¡Terminado! {actualizados} fotos subidas rápidamente. Descarga tu CSV de respaldo abajo.")
+                # Borrar temporal y recargar
+                shutil.rmtree(TEMP_ZIP_DIR, ignore_errors=True)
+                st.rerun()
 
     elif pestana_admin == "Cambiar Logo de Empresa":
         st.sidebar.subheader("Actualizar Logo")
