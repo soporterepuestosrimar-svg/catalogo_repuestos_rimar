@@ -41,6 +41,8 @@ h1, h2, h3 { color: #0A1628; }
 .iva-badge { background-color: #FFC107; color: #0A1628; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; font-weight: bold; margin-left: 6px; }
 .product-card { background-color: white; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; margin-bottom: 20px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.04); height: 100%; }
 .product-title { font-size: 0.95rem; font-weight: bold; color: #0A1628; height: 44px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-bottom: 8px; }
+.btn-eliminar>button { background-color: #ffffff; color: #E31E24; border: 1px solid #E31E24; }
+.btn-eliminar>button:hover { background-color: #ffe6e6; color: #cc0000; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -217,17 +219,62 @@ if modo_admin:
         st.rerun()
 
     pestana_admin = st.sidebar.radio("Opciones de Admin", [
+        "➕ Crear Artículo Nuevo",
         "Cargar Masivo (Excel/CSV)", 
         "Subida Masiva de Fotos (ZIP Permanente)",
         "Cambiar Logo de Empresa"
     ])
     
-    if pestana_admin == "Cargar Masivo (Excel/CSV)":
+    # ==========================================
+    # NUEVA FUNCIÓN: CREAR ARTÍCULO INDIVIDUAL
+    # ==========================================
+    if pestana_admin == "➕ Crear Artículo Nuevo":
+        st.sidebar.subheader("Crear un Repuesto Nuevo")
+        with st.sidebar.form("form_crear_nuevo"):
+            nuevo_art = st.text_input("Código de Artículo (Obligatorio) *")
+            nuevo_desc = st.text_input("Descripción (Obligatorio) *")
+            nueva_marca = st.text_input("Marca", value="GENERICA")
+            nuevo_precio = st.number_input("Precio ($)", min_value=0, step=1000)
+            nueva_foto_individual = st.file_uploader("Foto (Opcional)", type=["jpg", "png", "jpeg"])
+            
+            btn_crear = st.form_submit_button("💾 Guardar Artículo Nuevo")
+            
+            if btn_crear:
+                if nuevo_art.strip() == "" or nuevo_desc.strip() == "":
+                    st.sidebar.error("El Código y la Descripción son obligatorios.")
+                elif str(nuevo_art).strip() in df['ARTICULO'].astype(str).str.strip().values:
+                    st.sidebar.error("❌ ¡Ese código ya existe! Búscalo en el catálogo para editarlo.")
+                else:
+                    # Subir foto individual si la hay
+                    url_imagen_nueva = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
+                    if nueva_foto_individual is not None:
+                        try:
+                            res_nueva = cloudinary.uploader.upload(nueva_foto_individual, folder="catalogo_rimar")
+                            url_imagen_nueva = res_nueva.get("secure_url")
+                        except Exception as e:
+                            pass
+                    
+                    # Crear nueva fila de datos
+                    nueva_fila = pd.DataFrame([{
+                        "ARTICULO": str(nuevo_art).strip(),
+                        "DESCRIPSION": str(nuevo_desc).strip().upper(),
+                        "MARCA": str(nueva_marca).strip().upper(),
+                        "PRECIO": nuevo_precio,
+                        "IMAGEN": url_imagen_nueva,
+                        "CATEGORIA": clasificar_repuesto(nuevo_desc)
+                    }])
+                    
+                    # Añadir y guardar
+                    df = pd.concat([df, nueva_fila], ignore_index=True)
+                    df.to_csv(DATA_FILE, index=False)
+                    st.sidebar.success("¡Artículo creado con éxito! Recuerda descargar el respaldo.")
+                    st.rerun()
+
+    elif pestana_admin == "Cargar Masivo (Excel/CSV)":
         st.sidebar.subheader("Carga Masiva (Acumulativa)")
         archivo_subido = st.sidebar.file_uploader("Sube tu archivo (Excel/CSV)", type=["csv", "xlsx"])
         
         if archivo_subido is not None:
-            # BOTÓN DE SEGURIDAD PARA EVITAR BUCLE INFINITO
             if st.sidebar.button("⚙️ Procesar y Guardar Inventario"):
                 try:
                     if archivo_subido.name.endswith('.csv'):
@@ -292,7 +339,6 @@ if modo_admin:
         archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP (Recomendado: 300-500 fotos por vez)", type=["zip"])
         
         if archivo_zip is not None:
-            # BOTÓN DE SEGURIDAD PARA EVITAR BUCLE INFINITO
             if st.sidebar.button("☁️ Iniciar Subida a Cloudinary"):
                 if os.path.exists(TEMP_ZIP_DIR):
                     shutil.rmtree(TEMP_ZIP_DIR)
@@ -359,7 +405,6 @@ if modo_admin:
         logo_subido = st.sidebar.file_uploader("Sube la imagen de tu logo", type=["png", "jpg", "jpeg"])
         
         if logo_subido is not None:
-            # BOTÓN DE SEGURIDAD PARA EVITAR BUCLE INFINITO
             if st.sidebar.button("💾 Guardar y Aplicar Logo"):
                 with open(LOGO_FILE, "wb") as f:
                     f.write(logo_subido.getbuffer())
@@ -535,14 +580,14 @@ for fila in filas:
             art_val = str(row.get('ARTICULO', 'S/N'))
             
             if modo_admin:
-                with st.expander(f"✏️ Editar: {art_val}"):
+                with st.expander(f"✏️ Editar / Eliminar: {art_val}"):
                     with st.form(f"form_edit_{art_val}"):
                         nuevo_desc = st.text_input("Descripción", value=str(row.get('DESCRIPSION', '')))
                         nueva_marca = st.text_input("Marca", value=str(row.get('MARCA', '')))
                         nuevo_precio = st.number_input("Precio ($)", value=int(pd.to_numeric(row.get('PRECIO', 0), errors='coerce')) if pd.notna(row.get('PRECIO')) else 0, step=1000)
                         nueva_foto = st.file_uploader("Cambiar Foto", type=["jpg", "png", "jpeg"], key=f"img_{art_val}")
                         
-                        guardar_btn = st.form_submit_button("Guardar Cambios")
+                        guardar_btn = st.form_submit_button("💾 Guardar Cambios")
                         if guardar_btn:
                             match_idx = df[df['ARTICULO'].astype(str) == art_val].index
                             if len(match_idx) > 0:
@@ -559,6 +604,15 @@ for fila in filas:
                                 df.to_csv(DATA_FILE, index=False)
                                 st.success("¡Actualizado! Recuerda descargar tu respaldo.")
                                 st.rerun()
+                                
+                    # BOTÓN DE ELIMINAR (FUERA DEL FORMULARIO)
+                    st.markdown('<div class="btn-eliminar">', unsafe_allow_html=True)
+                    if st.button("🗑️ Eliminar Artículo", key=f"del_{art_val}", use_container_width=True):
+                        # Filtramos y quitamos el artículo de la base de datos
+                        df = df[df['ARTICULO'].astype(str) != art_val]
+                        df.to_csv(DATA_FILE, index=False)
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
 
             img_url = row.get('IMAGEN', "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400")
             if pd.isna(img_url) or not str(img_url).startswith("http"):
