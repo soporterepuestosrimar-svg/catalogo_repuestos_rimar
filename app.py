@@ -7,7 +7,7 @@ import shutil
 import cloudinary
 import cloudinary.uploader
 import urllib.parse
-import concurrent.futures  # <--- NUEVO: Para subida ultrarrápida en paralelo
+import concurrent.futures
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -227,143 +227,144 @@ if modo_admin:
         archivo_subido = st.sidebar.file_uploader("Sube tu archivo (Excel/CSV)", type=["csv", "xlsx"])
         
         if archivo_subido is not None:
-            try:
-                if archivo_subido.name.endswith('.csv'):
-                    try:
-                        df_subido = pd.read_csv(archivo_subido, sep=',')
-                        if len(df_subido.columns) <= 1:
+            # BOTÓN DE SEGURIDAD PARA EVITAR BUCLE INFINITO
+            if st.sidebar.button("⚙️ Procesar y Guardar Inventario"):
+                try:
+                    if archivo_subido.name.endswith('.csv'):
+                        try:
+                            df_subido = pd.read_csv(archivo_subido, sep=',')
+                            if len(df_subido.columns) <= 1:
+                                archivo_subido.seek(0)
+                                df_subido = pd.read_csv(archivo_subido, sep=';')
+                        except:
                             archivo_subido.seek(0)
-                            df_subido = pd.read_csv(archivo_subido, sep=';')
-                    except:
-                        archivo_subido.seek(0)
-                        df_subido = pd.read_csv(archivo_subido, sep=';', encoding='latin-1')
-                else:
-                    xls = pd.ExcelFile(archivo_subido)
-                    if 'Consolidado Precios Repuestos' in xls.sheet_names:
-                        df_subido = pd.read_excel(xls, sheet_name='Consolidado Precios Repuestos', header=1)
+                            df_subido = pd.read_csv(archivo_subido, sep=';', encoding='latin-1')
                     else:
-                        df_subido = pd.read_excel(xls)
-                        if any('Unnamed' in str(c) for c in df_subido.columns):
-                            for i in range(min(10, len(df_subido))):
-                                fila_vals = [str(v).upper() for v in df_subido.iloc[i].values]
-                                if any(k in v for v in fila_vals for k in ['CÓDIGO', 'CODIGO', 'ARTICULO', 'DESCRIPCIÓN']):
-                                    df_subido.columns = df_subido.iloc[i]
-                                    df_subido = df_subido.iloc[i+1:].reset_index(drop=True)
-                                    break
-                
-                df_subido.columns = [str(c).strip().upper() for c in df_subido.columns]
-                
-                renames = {
-                    'CÓDIGO': 'ARTICULO', 'CODIGO': 'ARTICULO',
-                    'DESCRIPCIÓN': 'DESCRIPSION', 'DESCRIPCION': 'DESCRIPSION',
-                    'PRECIO UNITARIO': 'PRECIO', 'MARCA PRODUCTO': 'MARCA',
-                    'SUBGRUPO': 'CATEGORIA'
-                }
-                df_subido = df_subido.rename(columns=renames)
-                
-                if 'ARTICULO' in df_subido.columns and 'DESCRIPSION' in df_subido.columns and 'PRECIO' in df_subido.columns:
-                    if 'IMAGEN' not in df_subido.columns:
-                        df_subido['IMAGEN'] = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
-                    if 'MARCA' not in df_subido.columns:
-                        df_subido['MARCA'] = "GENERICA"
+                        xls = pd.ExcelFile(archivo_subido)
+                        if 'Consolidado Precios Repuestos' in xls.sheet_names:
+                            df_subido = pd.read_excel(xls, sheet_name='Consolidado Precios Repuestos', header=1)
+                        else:
+                            df_subido = pd.read_excel(xls)
+                            if any('Unnamed' in str(c) for c in df_subido.columns):
+                                for i in range(min(10, len(df_subido))):
+                                    fila_vals = [str(v).upper() for v in df_subido.iloc[i].values]
+                                    if any(k in v for v in fila_vals for k in ['CÓDIGO', 'CODIGO', 'ARTICULO', 'DESCRIPCIÓN']):
+                                        df_subido.columns = df_subido.iloc[i]
+                                        df_subido = df_subido.iloc[i+1:].reset_index(drop=True)
+                                        break
                     
-                    if 'CATEGORIA' not in df_subido.columns:
-                        df_subido['CATEGORIA'] = df_subido['DESCRIPSION'].apply(clasificar_repuesto)
-                    else:
-                        df_subido['CATEGORIA'] = df_subido['CATEGORIA'].fillna('General').astype(str).str.title()
+                    df_subido.columns = [str(c).strip().upper() for c in df_subido.columns]
                     
-                    df_subido['ARTICULO'] = df_subido['ARTICULO'].astype(str)
-                    df['ARTICULO'] = df['ARTICULO'].astype(str)
+                    renames = {
+                        'CÓDIGO': 'ARTICULO', 'CODIGO': 'ARTICULO',
+                        'DESCRIPCIÓN': 'DESCRIPSION', 'DESCRIPCION': 'DESCRIPSION',
+                        'PRECIO UNITARIO': 'PRECIO', 'MARCA PRODUCTO': 'MARCA',
+                        'SUBGRUPO': 'CATEGORIA'
+                    }
+                    df_subido = df_subido.rename(columns=renames)
                     
-                    df_combinado = pd.concat([df, df_subido]).drop_duplicates(subset=['ARTICULO'], keep='last').reset_index(drop=True)
+                    if 'ARTICULO' in df_subido.columns and 'DESCRIPSION' in df_subido.columns and 'PRECIO' in df_subido.columns:
+                        if 'IMAGEN' not in df_subido.columns:
+                            df_subido['IMAGEN'] = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
+                        if 'MARCA' not in df_subido.columns:
+                            df_subido['MARCA'] = "GENERICA"
                         
-                    df_combinado.to_csv(DATA_FILE, index=False)
-                    st.sidebar.success("¡Artículos guardados! Descarga tu CSV de respaldo abajo.")
-                    st.rerun()
-                else:
-                    st.sidebar.error("Error: El sistema no pudo encontrar las columnas clave.")
-            except Exception as e:
-                st.sidebar.error(f"Error al procesar el archivo: {e}")
+                        if 'CATEGORIA' not in df_subido.columns:
+                            df_subido['CATEGORIA'] = df_subido['DESCRIPSION'].apply(clasificar_repuesto)
+                        else:
+                            df_subido['CATEGORIA'] = df_subido['CATEGORIA'].fillna('General').astype(str).str.title()
+                        
+                        df_subido['ARTICULO'] = df_subido['ARTICULO'].astype(str)
+                        df['ARTICULO'] = df['ARTICULO'].astype(str)
+                        
+                        df_combinado = pd.concat([df, df_subido]).drop_duplicates(subset=['ARTICULO'], keep='last').reset_index(drop=True)
+                            
+                        df_combinado.to_csv(DATA_FILE, index=False)
+                        st.sidebar.success("¡Artículos guardados! Descarga tu CSV de respaldo abajo.")
+                        st.rerun()
+                    else:
+                        st.sidebar.error("Error: El sistema no pudo encontrar las columnas clave.")
+                except Exception as e:
+                    st.sidebar.error(f"Error al procesar el archivo: {e}")
 
     elif pestana_admin == "Subida Masiva de Fotos (ZIP Permanente)":
         st.sidebar.subheader("Subida Masiva a la Nube (Rápida)")
         archivo_zip = st.sidebar.file_uploader("Sube tu archivo ZIP (Recomendado: 300-500 fotos por vez)", type=["zip"])
         
         if archivo_zip is not None:
-            if os.path.exists(TEMP_ZIP_DIR):
-                shutil.rmtree(TEMP_ZIP_DIR)
-            os.makedirs(TEMP_ZIP_DIR, exist_ok=True)
-                
-            with zipfile.ZipFile(archivo_zip, 'r') as z:
-                z.extractall(TEMP_ZIP_DIR)
-            
-            mapa_fotos = {}
-            for root, dirs, files in os.walk(TEMP_ZIP_DIR):
-                for file in files:
-                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
-                        nombre_base = os.path.splitext(file)[0].strip()
-                        limpio = re.sub(r'\D', '', nombre_base)
-                        if limpio:
-                            mapa_fotos[limpio] = os.path.join(root, file)
-
-            # Buscar qué filas del Excel tienen foto en el ZIP
-            tareas_upload = []
-            for idx, row in df.iterrows():
-                art_num = str(row['ARTICULO']).strip()
-                art_limpio = re.sub(r'\D', '', art_num)
-                if art_limpio in mapa_fotos:
-                    tareas_upload.append((idx, mapa_fotos[art_limpio]))
-
-            if not tareas_upload:
-                st.sidebar.warning("No se encontraron fotos en el ZIP que coincidan con los artículos del Excel.")
-            else:
-                st.sidebar.info(f"Procesando {len(tareas_upload)} fotos encontradas. Por favor, no cierres la ventana...")
-                
-                # BARRA DE PROGRESO
-                barra_progreso = st.sidebar.progress(0)
-                texto_progreso = st.sidebar.empty()
-                
-                actualizados = 0
-                total = len(tareas_upload)
-
-                # Función para subir a Cloudinary en hilos
-                def subir_a_cloudinary(tarea):
-                    i_df, foto_path = tarea
-                    try:
-                        res = cloudinary.uploader.upload(foto_path, folder="catalogo_rimar")
-                        return i_df, res.get("secure_url")
-                    except Exception:
-                        return i_df, None
-
-                # SUBIDA EN PARALELO (Hasta 10 a la vez = Mucho más rápido)
-                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                    futuros = {executor.submit(subir_a_cloudinary, t): t for t in tareas_upload}
+            # BOTÓN DE SEGURIDAD PARA EVITAR BUCLE INFINITO
+            if st.sidebar.button("☁️ Iniciar Subida a Cloudinary"):
+                if os.path.exists(TEMP_ZIP_DIR):
+                    shutil.rmtree(TEMP_ZIP_DIR)
+                os.makedirs(TEMP_ZIP_DIR, exist_ok=True)
                     
-                    for i, futuro in enumerate(concurrent.futures.as_completed(futuros)):
-                        idx_df, url = futuro.result()
-                        if url:
-                            df.loc[idx_df, 'IMAGEN'] = url
-                            actualizados += 1
-                        
-                        # Actualizar barra visual
-                        progreso_actual = (i + 1) / total
-                        barra_progreso.progress(progreso_actual)
-                        texto_progreso.text(f"Subiendo fotos: {i + 1} de {total} completadas...")
+                with zipfile.ZipFile(archivo_zip, 'r') as z:
+                    z.extractall(TEMP_ZIP_DIR)
+                
+                mapa_fotos = {}
+                for root, dirs, files in os.walk(TEMP_ZIP_DIR):
+                    for file in files:
+                        if file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                            nombre_base = os.path.splitext(file)[0].strip()
+                            limpio = re.sub(r'\D', '', nombre_base)
+                            if limpio:
+                                mapa_fotos[limpio] = os.path.join(root, file)
 
-                df.to_csv(DATA_FILE, index=False)
-                st.sidebar.success(f"¡Terminado! {actualizados} fotos subidas rápidamente. Descarga tu CSV de respaldo abajo.")
-                # Borrar temporal y recargar
-                shutil.rmtree(TEMP_ZIP_DIR, ignore_errors=True)
-                st.rerun()
+                tareas_upload = []
+                for idx, row in df.iterrows():
+                    art_num = str(row['ARTICULO']).strip()
+                    art_limpio = re.sub(r'\D', '', art_num)
+                    if art_limpio in mapa_fotos:
+                        tareas_upload.append((idx, mapa_fotos[art_limpio]))
+
+                if not tareas_upload:
+                    st.sidebar.warning("No se encontraron fotos en el ZIP que coincidan con los artículos del Excel.")
+                else:
+                    st.sidebar.info(f"Procesando {len(tareas_upload)} fotos encontradas. Por favor, no cierres la ventana...")
+                    
+                    barra_progreso = st.sidebar.progress(0)
+                    texto_progreso = st.sidebar.empty()
+                    
+                    actualizados = 0
+                    total = len(tareas_upload)
+
+                    def subir_a_cloudinary(tarea):
+                        i_df, foto_path = tarea
+                        try:
+                            res = cloudinary.uploader.upload(foto_path, folder="catalogo_rimar")
+                            return i_df, res.get("secure_url")
+                        except Exception:
+                            return i_df, None
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                        futuros = {executor.submit(subir_a_cloudinary, t): t for t in tareas_upload}
+                        
+                        for i, futuro in enumerate(concurrent.futures.as_completed(futuros)):
+                            idx_df, url = futuro.result()
+                            if url:
+                                df.loc[idx_df, 'IMAGEN'] = url
+                                actualizados += 1
+                            
+                            progreso_actual = (i + 1) / total
+                            barra_progreso.progress(progreso_actual)
+                            texto_progreso.text(f"Subiendo fotos: {i + 1} de {total} completadas...")
+
+                    df.to_csv(DATA_FILE, index=False)
+                    st.sidebar.success(f"¡Terminado! {actualizados} fotos subidas rápidamente. Descarga tu CSV de respaldo abajo.")
+                    shutil.rmtree(TEMP_ZIP_DIR, ignore_errors=True)
+                    st.rerun()
 
     elif pestana_admin == "Cambiar Logo de Empresa":
         st.sidebar.subheader("Actualizar Logo")
         logo_subido = st.sidebar.file_uploader("Sube la imagen de tu logo", type=["png", "jpg", "jpeg"])
+        
         if logo_subido is not None:
-            with open(LOGO_FILE, "wb") as f:
-                f.write(logo_subido.getbuffer())
-            st.sidebar.success("¡Logo actualizado con éxito!")
-            st.rerun()
+            # BOTÓN DE SEGURIDAD PARA EVITAR BUCLE INFINITO
+            if st.sidebar.button("💾 Guardar y Aplicar Logo"):
+                with open(LOGO_FILE, "wb") as f:
+                    f.write(logo_subido.getbuffer())
+                st.sidebar.success("¡Logo actualizado con éxito!")
+                st.rerun()
             
     # --- BOTÓN CLAVE DE RESPALDO PARA GITHUB ---
     st.sidebar.divider()
